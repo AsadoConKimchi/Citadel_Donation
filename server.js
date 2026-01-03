@@ -308,9 +308,33 @@ app.post("/api/donation-invoice", async (req, res) => {
       res.status(502).json({ message: "LNURL 콜백 주소가 없습니다." });
       return;
     }
+    const minSendable = Number(lnurlData?.minSendable || 0);
+    const maxSendable = Number(lnurlData?.maxSendable || 0);
     const donationId = createDonationId();
     const amountMsats = satsNumber * 1000;
+    if (minSendable && amountMsats < minSendable) {
+      res.status(400).json({
+        message: `기부 사토시가 최소 금액보다 작습니다. (최소 ${Math.ceil(
+          minSendable / 1000
+        )} sats)`,
+      });
+      return;
+    }
+    if (maxSendable && amountMsats > maxSendable) {
+      res.status(400).json({
+        message: `기부 사토시가 최대 금액보다 큽니다. (최대 ${Math.floor(
+          maxSendable / 1000
+        )} sats)`,
+      });
+      return;
+    }
     const commentAllowed = Number(lnurlData?.commentAllowed || 0);
+    if (!commentAllowed && donationNote?.trim()) {
+      res.status(400).json({
+        message: "해당 LNURL 주소는 메모를 지원하지 않습니다. 메모를 비워주세요.",
+      });
+      return;
+    }
     const comment = buildDonationComment(
       donationNote,
       donationId,
@@ -319,7 +343,9 @@ app.post("/api/donation-invoice", async (req, res) => {
     );
     const callbackUrl = new URL(callback);
     callbackUrl.searchParams.set("amount", String(amountMsats));
-    callbackUrl.searchParams.set("comment", comment);
+    if (commentAllowed) {
+      callbackUrl.searchParams.set("comment", comment);
+    }
 
     const invoiceResponse = await fetch(callbackUrl.toString());
     if (!invoiceResponse.ok) {
