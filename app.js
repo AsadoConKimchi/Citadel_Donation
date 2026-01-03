@@ -5,6 +5,8 @@ const goalProgressEl = document.getElementById("goal-progress");
 const satsRateInput = document.getElementById("sats-rate");
 const satsTotalEl = document.getElementById("sats-total");
 const finishButton = document.getElementById("finish");
+const studyPlanInput = document.getElementById("study-plan");
+const planStatus = document.getElementById("plan-status");
 
 const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
@@ -21,6 +23,7 @@ const discordAvatar = document.getElementById("discord-avatar");
 const discordBanner = document.getElementById("discord-banner");
 const discordUsername = document.getElementById("discord-username");
 const discordGuild = document.getElementById("discord-guild");
+const allowedServer = document.getElementById("allowed-server");
 
 const studyLanguageInput = document.getElementById("study-language");
 const studyTopicInput = document.getElementById("study-topic");
@@ -45,6 +48,7 @@ let cameraStream = null;
 let photoSource = null;
 
 const todayKey = new Date().toISOString().slice(0, 10);
+const planKey = `citadel-plan-${todayKey}`;
 
 const formatTime = (seconds) => {
   const hrs = String(Math.floor(seconds / 3600)).padStart(2, "0");
@@ -142,6 +146,31 @@ const initializeTotals = () => {
   updateTotals();
 };
 
+const loadStudyPlan = () => {
+  const savedPlan = localStorage.getItem(planKey);
+  if (savedPlan && studyPlanInput) {
+    studyPlanInput.value = savedPlan;
+  }
+};
+
+const saveStudyPlan = () => {
+  if (!studyPlanInput) {
+    return;
+  }
+  const value = studyPlanInput.value.trim();
+  if (value) {
+    localStorage.setItem(planKey, value);
+    if (planStatus) {
+      planStatus.textContent = "학습 목표가 저장되었습니다.";
+    }
+  } else {
+    localStorage.removeItem(planKey);
+    if (planStatus) {
+      planStatus.textContent = "학습 목표는 자동 저장됩니다.";
+    }
+  }
+};
+
 const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
   if (error) {
     discordStatus.textContent = `로그인 상태: ${error}`;
@@ -149,6 +178,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
     discordProfile.style.display = "none";
+    if (allowedServer) {
+      allowedServer.textContent = "접속 가능 서버: 확인 실패";
+    }
     return;
   }
 
@@ -158,6 +190,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
     discordProfile.style.display = "none";
+    if (allowedServer) {
+      allowedServer.textContent = "접속 가능 서버: 로그인 필요";
+    }
     return;
   }
 
@@ -167,6 +202,10 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "inline-flex";
     discordProfile.style.display = "none";
+    if (allowedServer) {
+      const guildName = guild?.name ?? "citadel.sx";
+      allowedServer.textContent = `접속 가능 서버: ${guildName}`;
+    }
     return;
   }
 
@@ -190,6 +229,10 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
   if (guild?.name) {
     discordGuild.textContent = `서버: ${guild.name}`;
   }
+  if (allowedServer) {
+    const guildName = guild?.name ?? "citadel.sx";
+    allowedServer.textContent = `접속 가능 서버: ${guildName}`;
+  }
 };
 
 discordAppLogin.addEventListener("click", () => {
@@ -212,6 +255,9 @@ finishButton.addEventListener("click", finishSession);
 
 satsRateInput.addEventListener("input", updateSats);
 goalInput.addEventListener("input", updateTotals);
+if (studyPlanInput) {
+  studyPlanInput.addEventListener("input", saveStudyPlan);
+}
 
 const stopCamera = () => {
   if (cameraStream) {
@@ -340,6 +386,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 initializeTotals();
+loadStudyPlan();
 
 const loadSession = async () => {
   try {

@@ -22,7 +22,7 @@
           시타델 이디오마는 지정된 디스코드 서버 회원만 사용할 수 있습니다.
         </p>
         <div class="row">
-          <span class="pill">접속 가능 서버: citadel.sx</span>
+          <span class="pill" id="allowed-server">접속 가능 서버: 확인 중...</span>
         </div>
         <div class="stack">
           <div class="row">
@@ -60,6 +60,15 @@
               오늘 목표 공부 시간 (분)
               <input id="goal-minutes" type="number" min="1" value="120" />
             </label>
+            <label>
+              오늘의 학습 목표
+              <textarea
+                id="study-plan"
+                rows="3"
+                placeholder="예: 스페인어 회화 2과 복습 + 단어 20개 암기"
+              ></textarea>
+            </label>
+            <p class="hint" id="plan-status">학습 목표는 자동 저장됩니다.</p>
             <div class="row">
               <button id="start" class="primary">시작</button>
               <button id="pause">일시정지</button>
