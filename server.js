@@ -29,7 +29,7 @@ const hasDiscordConfig =
   DISCORD_GUILD_ID &&
   DISCORD_ROLE_ID;
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(
   session({
     secret: SESSION_SECRET || "citadel-idioma-secret",

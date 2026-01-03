@@ -4,6 +4,7 @@ const totalTodayEl = document.getElementById("total-today");
 const goalProgressEl = document.getElementById("goal-progress");
 const satsRateInput = document.getElementById("sats-rate");
 const satsTotalEl = document.getElementById("sats-total");
+const satsTotalAllEl = document.getElementById("sats-total-all");
 const finishButton = document.getElementById("finish");
 const studyPlanInput = document.getElementById("study-plan");
 const planStatus = document.getElementById("plan-status");
@@ -51,6 +52,8 @@ const downloadLink = document.getElementById("download");
 const donationNote = document.getElementById("donation-note");
 const donateButton = document.getElementById("donate");
 const donationStatus = document.getElementById("donation-status");
+const donationHistory = document.getElementById("donation-history");
+const donationHistoryEmpty = document.getElementById("donation-history-empty");
 
 let timerInterval = null;
 let elapsedSeconds = 0;
@@ -157,12 +160,24 @@ const saveSessions = (sessions) => {
 };
 
 const getLastSessionSeconds = () => {
-  const saved = Number(localStorage.getItem(lastSessionKey) || 0);
-  return Number.isNaN(saved) ? 0 : saved;
+  try {
+    const raw = localStorage.getItem(lastSessionKey);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed) {
+      return { durationSeconds: 0, goalMinutes: 0, plan: "" };
+    }
+    return {
+      durationSeconds: Number(parsed.durationSeconds || 0),
+      goalMinutes: Number(parsed.goalMinutes || 0),
+      plan: parsed.plan || "",
+    };
+  } catch (error) {
+    return { durationSeconds: 0, goalMinutes: 0, plan: "" };
+  }
 };
 
 const setLastSessionSeconds = (value) => {
-  localStorage.setItem(lastSessionKey, String(value));
+  localStorage.setItem(lastSessionKey, JSON.stringify(value));
 };
 
 const renderSessions = () => {
@@ -220,7 +235,7 @@ const finishSession = () => {
   saveSessions(sessions);
   const total = getStoredTotal() + elapsedSeconds;
   setStoredTotal(total);
-  setLastSessionSeconds(elapsedSeconds);
+  setLastSessionSeconds({ durationSeconds: elapsedSeconds, goalMinutes, plan });
   elapsedSeconds = 0;
   updateDisplay();
   updateTotals();
@@ -229,12 +244,15 @@ const finishSession = () => {
   setTimeout(() => {
     finishButton.textContent = "공부 종료 & 인증하기";
   }, 2000);
+  if (photoSource) {
+    drawBadge();
+  }
   openCameraButton?.focus();
 };
 
 const getDonationSeconds = () => {
   if (donationScope?.value === "session") {
-    return getLastSessionSeconds();
+    return getLastSessionSeconds().durationSeconds;
   }
   return getStoredTotal();
 };
@@ -254,9 +272,43 @@ const updateSats = () => {
   satsTotalEl.textContent = `${sats} sats`;
 };
 
+const getDonationHistory = () =>
+  JSON.parse(localStorage.getItem("citadel-donations") || "[]");
+
+const renderDonationHistory = () => {
+  if (!donationHistory || !donationHistoryEmpty) {
+    return;
+  }
+  const history = getDonationHistory();
+  donationHistory.innerHTML = "";
+  donationHistoryEmpty.style.display = history.length ? "none" : "block";
+  history.slice().reverse().forEach((item) => {
+    const entry = document.createElement("div");
+    entry.className = "history-item";
+    const scopeLabel = item.scope === "session" ? "회차 별" : "누적";
+    const modeLabel = item.mode === "words" ? "공부량" : "공부 시간";
+    entry.innerHTML = `
+      <div><strong>${item.date}</strong> · ${scopeLabel} · ${modeLabel}</div>
+      <div>기부: <strong>${item.sats} sats</strong> · ${item.minutes}분</div>
+      <div>메모: ${item.note || "없음"}</div>
+    `;
+    donationHistory.appendChild(entry);
+  });
+};
+
+const updateDonationTotals = () => {
+  if (!satsTotalAllEl) {
+    return;
+  }
+  const total = getDonationHistory().reduce((sum, item) => sum + (item.sats || 0), 0);
+  satsTotalAllEl.textContent = `${total} sats`;
+};
+
 const initializeTotals = () => {
   updateDisplay();
   updateTotals();
+  updateDonationTotals();
+  renderDonationHistory();
 };
 
 const loadStudyPlan = () => {
@@ -490,26 +542,11 @@ const drawBadge = () => {
     context.drawImage(photoSource, x, y, width, height);
   }
 
-  const sessions = loadSessions();
-  const sessionLines = sessions.map((session, index) => {
-    const goalRate = session.goalMinutes
-      ? Math.min(100, (session.durationSeconds / 60 / session.goalMinutes) * 100)
-      : 0;
-    const plan = (session.plan || "미입력").trim();
-    const trimmedPlan = plan.length > 24 ? `${plan.slice(0, 24)}…` : plan;
-    return `${index + 1}회차 ${trimmedPlan} · ${formatMinutesSeconds(
-      session.durationSeconds
-    )} · ${goalRate.toFixed(1)}%`;
-  });
-  const maxSessionLines = 6;
-  const displayLines =
-    sessionLines.length > maxSessionLines
-      ? [
-          ...sessionLines.slice(0, maxSessionLines),
-          `외 ${sessionLines.length - maxSessionLines}회차 더 있음`,
-        ]
-      : sessionLines;
-  const overlayHeight = Math.min(520, 280 + displayLines.length * 28);
+  const lastSession = getLastSessionSeconds();
+  const lastGoalRate = lastSession.goalMinutes
+    ? Math.min(100, (lastSession.durationSeconds / 60 / lastSession.goalMinutes) * 100)
+    : 0;
+  const overlayHeight = 340;
 
   context.fillStyle = "rgba(15, 23, 42, 0.65)";
   context.fillRect(0, badgeCanvas.height - overlayHeight, badgeCanvas.width, overlayHeight);
@@ -519,27 +556,18 @@ const drawBadge = () => {
   context.fillText("오늘의 공부 인증", 60, badgeCanvas.height - overlayHeight + 90);
 
   context.font = "bold 36px sans-serif";
-  const plan = getPlanValue() || "학습 목표 미입력";
+  const plan = lastSession.plan || "학습 목표 미입력";
   context.fillText(`학습목표: ${plan}`, 60, badgeCanvas.height - overlayHeight + 150);
 
   context.font = "28px sans-serif";
-  const totalSeconds = getStoredTotal();
-  const studyTimeLabel = formatMinutesSeconds(totalSeconds);
+  const studyTimeLabel = formatMinutesSeconds(lastSession.durationSeconds || 0);
   context.fillText(`Study Time: ${studyTimeLabel}`, 60, badgeCanvas.height - overlayHeight + 205);
 
-  const goalRate = getGoalProgress(totalSeconds).toFixed(1);
-  context.fillText(`Goal Rate: ${goalRate}%`, 60, badgeCanvas.height - overlayHeight + 245);
-
-  if (displayLines.length) {
-    context.font = "24px sans-serif";
-    displayLines.forEach((line, index) => {
-      context.fillText(
-        line,
-        60,
-        badgeCanvas.height - overlayHeight + 285 + index * 28
-      );
-    });
-  }
+  context.fillText(
+    `Goal Rate: ${lastGoalRate.toFixed(1)}%`,
+    60,
+    badgeCanvas.height - overlayHeight + 245
+  );
 
   context.font = "24px sans-serif";
   const date = new Date().toLocaleDateString("ko-KR", {
@@ -561,23 +589,39 @@ const drawBadge = () => {
   }
 };
 
+const getBadgeDataUrl = () => {
+  const rawDataUrl = badgeCanvas.toDataURL("image/png");
+  if (!rawDataUrl || rawDataUrl === "data:,") {
+    return rawDataUrl;
+  }
+  const maxSize = 720;
+  const scaled = document.createElement("canvas");
+  const scale = Math.min(maxSize / badgeCanvas.width, maxSize / badgeCanvas.height);
+  scaled.width = Math.round(badgeCanvas.width * scale);
+  scaled.height = Math.round(badgeCanvas.height * scale);
+  const context = scaled.getContext("2d");
+  context.drawImage(badgeCanvas, 0, 0, scaled.width, scaled.height);
+  return scaled.toDataURL("image/png", 0.92);
+};
+
 const shareToDiscord = async () => {
   if (!badgeCanvas) {
     return;
   }
-  const dataUrl = badgeCanvas.toDataURL("image/png");
+  const dataUrl = getBadgeDataUrl();
   if (!dataUrl || dataUrl === "data:,") {
     alert("먼저 인증 카드를 생성해주세요.");
     return;
   }
+  const lastSession = getLastSessionSeconds();
   const totalSeconds = getStoredTotal();
   const donationSeconds = getDonationSeconds();
   const donationMinutes = Math.floor(donationSeconds / 60);
   const payload = {
     dataUrl,
-    plan: getPlanValue() || "학습 목표 미입력",
-    studyTime: formatMinutesSeconds(totalSeconds),
-    goalRate: `${getGoalProgress(totalSeconds).toFixed(1)}%`,
+    plan: lastSession.plan || "학습 목표 미입력",
+    studyTime: formatMinutesSeconds(lastSession.durationSeconds || 0),
+    goalRate: `${lastSession.goalMinutes ? Math.min(100, (lastSession.durationSeconds / 60 / lastSession.goalMinutes) * 100).toFixed(1) : "0.0"}%`,
     minutes: donationMinutes,
     sats: Number((satsTotalEl.textContent || "0").replace(/\D/g, "")) || 0,
     donationMode: donationMode?.value || "time",
@@ -645,6 +689,8 @@ donateButton.addEventListener("click", () => {
   });
   localStorage.setItem("citadel-donations", JSON.stringify(history));
   donationStatus.textContent = `오늘 ${sats} sats 기부 기록을 저장했습니다.`;
+  updateDonationTotals();
+  renderDonationHistory();
 });
 
 window.addEventListener("beforeunload", () => {

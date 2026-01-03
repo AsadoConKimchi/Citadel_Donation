@@ -263,6 +263,26 @@ button.ghost {
   color: #111827;
 }
 
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.history-item strong {
+  color: #111827;
+}
+
 .locked {
   opacity: 0.6;
   pointer-events: none;
