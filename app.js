@@ -33,6 +33,8 @@ const discordGuild = document.getElementById("discord-guild");
 const allowedServer = document.getElementById("allowed-server");
 const sessionList = document.getElementById("session-list");
 const sessionEmpty = document.getElementById("session-empty");
+const loginUser = document.getElementById("login-user");
+const loginUserName = document.getElementById("login-user-name");
 
 const studyPlanPreview = document.getElementById("study-plan-preview");
 const openCameraButton = document.getElementById("open-camera");
@@ -279,6 +281,11 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
     discordProfile.style.display = "none";
+    if (loginUser) {
+      loginUser.classList.add("hidden");
+    }
+    discordAppLogin.style.display = "inline-flex";
+    discordWebLogin.style.display = "inline-flex";
     if (allowedServer) {
       allowedServer.textContent = "접속 가능 서버: 확인 실패";
     }
@@ -291,6 +298,11 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
     discordProfile.style.display = "none";
+    if (loginUser) {
+      loginUser.classList.add("hidden");
+    }
+    discordAppLogin.style.display = "inline-flex";
+    discordWebLogin.style.display = "inline-flex";
     if (allowedServer) {
       allowedServer.textContent = "접속 가능 서버: 로그인 필요";
     }
@@ -303,9 +315,17 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     mainContent.classList.add("locked");
     discordLogout.style.display = "inline-flex";
     discordProfile.style.display = "none";
+    if (loginUser) {
+      loginUser.classList.remove("hidden");
+    }
+    discordAppLogin.style.display = "none";
+    discordWebLogin.style.display = "none";
     if (allowedServer) {
       const guildName = guild?.name ?? "citadel.sx";
       allowedServer.textContent = `접속 가능 서버: ${guildName}`;
+    }
+    if (user && loginUserName) {
+      loginUserName.textContent = user.username ?? "-";
     }
     return;
   }
@@ -315,6 +335,11 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
   mainContent.classList.remove("locked");
   discordLogout.style.display = "inline-flex";
   discordProfile.style.display = "block";
+  if (loginUser) {
+    loginUser.classList.remove("hidden");
+  }
+  discordAppLogin.style.display = "none";
+  discordWebLogin.style.display = "none";
   if (user) {
     const avatarUrl = user.avatar
       ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
@@ -326,6 +351,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     discordBanner.style.backgroundImage = bannerUrl ? `url(${bannerUrl})` : "";
     discordBanner.style.backgroundSize = "cover";
     discordUsername.textContent = user.username;
+    if (loginUserName) {
+      loginUserName.textContent = user.username;
+    }
   }
   if (guild?.name) {
     discordGuild.textContent = `서버: ${guild.name}`;
@@ -508,8 +536,10 @@ const shareToDiscord = async () => {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "공유에 실패했습니다.");
+      const errorBody = await response.json().catch(async () => ({
+        message: await response.text(),
+      }));
+      throw new Error(errorBody?.message || "공유에 실패했습니다.");
     }
     const result = await response.json();
     if (shareStatus) {
@@ -517,7 +547,9 @@ const shareToDiscord = async () => {
     }
   } catch (error) {
     if (shareStatus) {
-      shareStatus.textContent = "공유에 실패했습니다. 서버 설정을 확인해주세요.";
+      shareStatus.textContent = error?.message
+        ? `공유에 실패했습니다. ${error.message}`
+        : "공유에 실패했습니다. 서버 설정을 확인해주세요.";
     }
   }
 };

@@ -24,11 +24,15 @@
         <div class="row">
           <span class="pill" id="allowed-server">접속 가능 서버: 확인 중...</span>
         </div>
-        <div class="stack">
-          <div class="row">
-            <button id="discord-app-login" class="primary">App Login</button>
-            <button id="discord-web-login">Web Login</button>
-          </div>
+          <div class="stack">
+            <div class="row">
+              <button id="discord-app-login" class="primary">App Login</button>
+              <button id="discord-web-login">Web Login</button>
+              <div id="login-user" class="login-user hidden">
+                <span class="login-label">로그인됨:</span>
+                <span id="login-user-name">-</span>
+              </div>
+            </div>
           <div class="profile" id="discord-profile">
             <div class="banner" id="discord-banner"></div>
             <div class="profile-body">
