@@ -200,6 +200,24 @@
       <p>Citadel Idioma · 공부 기록을 사토시 기부로 연결합니다.</p>
     </footer>
 
+    <div id="wallet-modal" class="wallet-modal hidden" aria-hidden="true">
+      <div class="wallet-modal__panel" role="dialog" aria-modal="true">
+        <div class="wallet-modal__header">
+          <h3>결제할 라이트닝 지갑을 선택하세요</h3>
+          <button class="wallet-modal__close" id="wallet-modal-close" aria-label="닫기">
+            ✕
+          </button>
+        </div>
+        <div class="wallet-modal__body">
+          <button class="wallet-option" data-wallet="walletofsatoshi">Wallet of Satoshi</button>
+          <button class="wallet-option" data-wallet="speed">Speed</button>
+          <button class="wallet-option" data-wallet="blink">Blink</button>
+          <button class="wallet-option" data-wallet="strike">Strike</button>
+        </div>
+        <p class="hint">선택한 지갑으로 인보이스를 전달합니다.</p>
+      </div>
+    </div>
+
     <script src="app.js"></script>
   </body>
 </html>

@@ -54,6 +54,9 @@ const donateButton = document.getElementById("donate");
 const donationStatus = document.getElementById("donation-status");
 const donationHistory = document.getElementById("donation-history");
 const donationHistoryEmpty = document.getElementById("donation-history-empty");
+const walletModal = document.getElementById("wallet-modal");
+const walletModalClose = document.getElementById("wallet-modal-close");
+const walletOptions = document.querySelectorAll(".wallet-option");
 
 let timerInterval = null;
 let elapsedSeconds = 0;
@@ -369,7 +372,7 @@ const openLightningWallet = async () => {
       shareStatus.textContent =
         "지갑 앱을 열었습니다. 결제 완료 시 디스코드에 자동 공유됩니다.";
     }
-    window.location.href = `lightning:${result.invoice}`;
+    openWalletSelection(result.invoice);
   } catch (error) {
     if (shareStatus) {
       shareStatus.textContent = error?.message
@@ -377,6 +380,44 @@ const openLightningWallet = async () => {
         : "인보이스 생성에 실패했습니다.";
     }
   }
+};
+
+const walletDeepLinks = {
+  walletofsatoshi: (invoice) => `walletofsatoshi://pay?invoice=${invoice}`,
+  speed: (invoice) => `speed://pay?invoice=${invoice}`,
+  blink: (invoice) => `blink://pay?invoice=${invoice}`,
+  strike: (invoice) => `strike://pay?invoice=${invoice}`,
+};
+
+const openWalletSelection = (invoice) => {
+  if (!walletModal) {
+    window.location.href = `lightning:${invoice}`;
+    return;
+  }
+  walletModal.dataset.invoice = invoice;
+  walletModal.classList.remove("hidden");
+  walletModal.setAttribute("aria-hidden", "false");
+};
+
+const closeWalletSelection = () => {
+  if (!walletModal) {
+    return;
+  }
+  walletModal.classList.add("hidden");
+  walletModal.setAttribute("aria-hidden", "true");
+  walletModal.dataset.invoice = "";
+};
+
+const launchWallet = (walletKey) => {
+  const invoice = walletModal?.dataset?.invoice;
+  if (!invoice) {
+    alert("인보이스 정보를 찾을 수 없습니다.");
+    return;
+  }
+  const deepLinkBuilder = walletDeepLinks[walletKey];
+  const deepLink = deepLinkBuilder ? deepLinkBuilder(invoice) : `lightning:${invoice}`;
+  closeWalletSelection();
+  window.location.href = deepLink;
 };
 
 const loadStudyPlan = () => {
@@ -719,6 +760,21 @@ window.addEventListener("beforeunload", () => {
 initializeTotals();
 loadStudyPlan();
 renderSessions();
+
+walletModalClose?.addEventListener("click", closeWalletSelection);
+walletModal?.addEventListener("click", (event) => {
+  if (event.target === walletModal) {
+    closeWalletSelection();
+  }
+});
+walletOptions.forEach((option) => {
+  option.addEventListener("click", (event) => {
+    const walletKey = event.currentTarget?.dataset?.wallet;
+    if (walletKey) {
+      launchWallet(walletKey);
+    }
+  });
+});
 
 const loadSession = async () => {
   try {
