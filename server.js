@@ -71,6 +71,9 @@ const parseLightningAddress = (address) => {
   return { name, domain };
 };
 
+const isBolt11Invoice = (invoice) =>
+  Boolean(invoice) && /^ln(bc|tb|tbs|bcrt)[0-9a-z]+$/i.test(invoice.trim());
+
 const sendDiscordShare = async ({ dataUrl, plan, studyTime, goalRate, minutes, sats, donationMode, wordCount, username, donationNote }) => {
   if (!DISCORD_WEBHOOK_URL) {
     throw new Error("DISCORD_WEBHOOK_URL이 설정되지 않았습니다.");
@@ -326,8 +329,10 @@ app.post("/api/donation-invoice", async (req, res) => {
     }
     const invoiceData = await invoiceResponse.json();
     const invoice = invoiceData?.pr || invoiceData?.paymentRequest;
-    if (!invoice) {
-      res.status(502).json({ message: "인보이스 응답이 올바르지 않습니다." });
+    if (!invoice || !isBolt11Invoice(invoice)) {
+      res
+        .status(502)
+        .json({ message: "BOLT11 인보이스 생성에 실패했습니다. LNURL 응답을 확인해주세요." });
       return;
     }
 
