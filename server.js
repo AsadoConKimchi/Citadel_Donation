@@ -24,6 +24,9 @@ const {
   PORT = 3000,
 } = process.env;
 
+const DEFAULT_BLINK_ADDRESS = "becadecitadel@blink.sv";
+const effectiveBlinkAddress = BLINK_LIGHTNING_ADDRESS || DEFAULT_BLINK_ADDRESS;
+
 const hasDiscordConfig =
   DISCORD_CLIENT_ID &&
   DISCORD_CLIENT_SECRET &&
@@ -257,11 +260,6 @@ app.get("/api/session", (req, res) => {
 });
 
 app.post("/api/donation-invoice", async (req, res) => {
-  if (!BLINK_LIGHTNING_ADDRESS) {
-    res.status(400).json({ message: "BLINK_LIGHTNING_ADDRESS가 설정되지 않았습니다." });
-    return;
-  }
-
   const {
     dataUrl,
     plan,
@@ -287,9 +285,11 @@ app.post("/api/donation-invoice", async (req, res) => {
     return;
   }
 
-  const addressParts = parseLightningAddress(BLINK_LIGHTNING_ADDRESS);
+  const addressParts = parseLightningAddress(effectiveBlinkAddress);
   if (!addressParts) {
-    res.status(400).json({ message: "BLINK_LIGHTNING_ADDRESS 형식이 올바르지 않습니다." });
+    res
+      .status(400)
+      .json({ message: "Blink Lightning 주소 형식이 올바르지 않습니다." });
     return;
   }
 
@@ -315,7 +315,7 @@ app.post("/api/donation-invoice", async (req, res) => {
       donationNote,
       donationId,
       commentAllowed,
-      BLINK_LIGHTNING_ADDRESS
+      effectiveBlinkAddress
     );
     const callbackUrl = new URL(callback);
     callbackUrl.searchParams.set("amount", String(amountMsats));
