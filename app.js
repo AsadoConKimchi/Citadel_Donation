@@ -1118,6 +1118,64 @@ const updateDonationModeUI = () => {
   updateSats();
 };
 
+const saveStudyPlan = () => {
+  if (!studyPlanInput) {
+    return;
+  }
+  applyStudyPlanValue(studyPlanInput.value);
+};
+
+const updateDonationModeUI = () => {
+  if (!donationMode || !donationCountField || !donationCountInput) {
+    return;
+  }
+  const mode = donationMode.value;
+  const isTime = mode === "time";
+  donationCountField.classList.toggle("hidden", isTime);
+  const label = donationCountField.querySelector("span");
+  const labelTextMap = {
+    pages: "오늘 공부한 페이지 수",
+    problems: "오늘 푼 문제(단어) 수",
+    other: "기타 기준 수량",
+  };
+  if (label) {
+    label.textContent = labelTextMap[mode] || "기준 수량";
+  }
+  if (isTime) {
+    donationCountInput.value = "0";
+  }
+  updateSats();
+};
+
+const saveStudyPlan = () => {
+  if (!studyPlanInput) {
+    return;
+  }
+  applyStudyPlanValue(studyPlanInput.value);
+};
+
+const updateDonationModeUI = () => {
+  if (!donationMode || !donationCountField || !donationCountInput) {
+    return;
+  }
+  const mode = donationMode.value;
+  const isTime = mode === "time";
+  donationCountField.classList.toggle("hidden", isTime);
+  const label = donationCountField.querySelector("span");
+  const labelTextMap = {
+    pages: "오늘 공부한 페이지 수",
+    problems: "오늘 푼 문제(단어) 수",
+    other: "기타 기준 수량",
+  };
+  if (label) {
+    label.textContent = labelTextMap[mode] || "기준 수량";
+  }
+  if (isTime) {
+    donationCountInput.value = "0";
+  }
+  updateSats();
+};
+
 const updateDiscordProfile = ({ user, guild, authorized }) => {
   if (!discordProfile) {
     return;
@@ -1455,6 +1513,7 @@ loadStudyPlan();
 renderSessions();
 renderStudyHistoryPage();
 renderDonationHistoryPage();
+promptPendingDailyDonation();
 
 walletModalClose?.addEventListener("click", closeWalletSelection);
 walletModal?.addEventListener("click", (event) => {
