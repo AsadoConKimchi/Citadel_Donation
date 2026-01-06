@@ -23,6 +23,7 @@ const resetButton = document.getElementById("reset");
 
 const discordAppLogin = document.getElementById("discord-app-login");
 const discordWebLogin = document.getElementById("discord-web-login");
+const discordRefresh = document.getElementById("discord-refresh");
 const discordHint = document.getElementById("discord-hint");
 const discordStatus = document.getElementById("discord-status");
 const discordLogout = document.getElementById("discord-logout");
@@ -490,6 +491,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     discordHint.textContent = "서버 설정을 확인해주세요.";
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
+    if (discordRefresh) {
+      discordRefresh.style.display = "none";
+    }
     discordProfile.style.display = "none";
     if (loginUser) {
       loginUser.classList.add("hidden");
@@ -507,6 +511,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     discordHint.textContent = "Discord 로그인 후 역할(Role) 검증이 완료됩니다.";
     mainContent.classList.add("locked");
     discordLogout.style.display = "none";
+    if (discordRefresh) {
+      discordRefresh.style.display = "none";
+    }
     discordProfile.style.display = "none";
     if (loginUser) {
       loginUser.classList.add("hidden");
@@ -524,6 +531,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     discordHint.textContent = "지정된 Role 권한이 필요합니다.";
     mainContent.classList.add("locked");
     discordLogout.style.display = "inline-flex";
+    if (discordRefresh) {
+      discordRefresh.style.display = "inline-flex";
+    }
     discordProfile.style.display = "none";
     if (loginUser) {
       loginUser.classList.remove("hidden");
@@ -544,6 +554,9 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
   discordHint.textContent = "역할(Role) 확인 완료. 모든 기능을 사용할 수 있습니다.";
   mainContent.classList.remove("locked");
   discordLogout.style.display = "inline-flex";
+  if (discordRefresh) {
+    discordRefresh.style.display = "inline-flex";
+  }
   discordProfile.style.display = "block";
   if (loginUser) {
     loginUser.classList.remove("hidden");
@@ -806,12 +819,20 @@ walletOptions.forEach((option) => {
   });
 });
 
-const loadSession = async () => {
+const loadSession = async ({ ignoreUrlFlag = false } = {}) => {
   try {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("unauthorized")) {
+    if (!ignoreUrlFlag && params.get("unauthorized")) {
       setAuthState({ authenticated: true, authorized: false });
       return;
+    }
+    if (ignoreUrlFlag && params.has("unauthorized")) {
+      params.delete("unauthorized");
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
+    if (discordStatus) {
+      discordStatus.textContent = "로그인 상태: 확인 중...";
     }
     const response = await fetch("/api/session");
     if (!response.ok) {
@@ -826,3 +847,13 @@ const loadSession = async () => {
 };
 
 loadSession();
+if (discordRefresh) {
+  discordRefresh.addEventListener("click", async () => {
+    discordRefresh.disabled = true;
+    const originalLabel = discordRefresh.textContent;
+    discordRefresh.textContent = "확인 중...";
+    await loadSession({ ignoreUrlFlag: true });
+    discordRefresh.textContent = originalLabel;
+    discordRefresh.disabled = false;
+  });
+}
