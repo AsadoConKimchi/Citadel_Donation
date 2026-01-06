@@ -1460,6 +1460,7 @@ loadStudyPlan();
 renderSessions();
 renderStudyHistoryPage();
 renderDonationHistoryPage();
+promptPendingDailyDonation();
 
 walletModalClose?.addEventListener("click", closeWalletSelection);
 walletModal?.addEventListener("click", (event) => {
@@ -1535,6 +1536,7 @@ const loadSession = async ({ ignoreUrlFlag = false } = {}) => {
 };
 
 loadSession();
+promptPendingDailyDonation();
 if (discordRefresh) {
   discordRefresh.addEventListener("click", async () => {
     discordRefresh.disabled = true;
