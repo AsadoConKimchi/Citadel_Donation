@@ -587,7 +587,8 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     return;
   }
 
-  discordStatus.textContent = `로그인 상태: ${user?.username ?? "인증됨"}`;
+  const roleName = guild?.roleName || "지정 역할";
+  discordStatus.textContent = `로그인 상태: 역할(${roleName}) 확인`;
   discordHint.textContent = "역할(Role) 확인 완료. 모든 기능을 사용할 수 있습니다.";
   mainContent.classList.remove("locked");
   discordLogout.style.display = "inline-flex";
