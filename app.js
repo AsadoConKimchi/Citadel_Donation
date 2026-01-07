@@ -73,6 +73,7 @@ const donationHistoryPagination = document.getElementById("donation-history-pagi
 const accumulationToast = document.getElementById("accumulation-toast");
 const accumulationToastMessage = document.getElementById("accumulation-toast-message");
 const accumulationToastClose = accumulationToast?.querySelector(".toast-close");
+const timerAccumulatedNote = document.getElementById("timer-accumulated-note");
 
 let timerInterval = null;
 let elapsedSeconds = 0;
@@ -709,10 +710,34 @@ const getDonationSatsForScope = () => {
   });
 };
 
+const getDonationPaymentSnapshot = () => {
+  const scope = getDonationScopeValue();
+  if (scope !== "session") {
+    return {
+      scope,
+      seconds: getDonationSeconds(),
+      sats: getDonationSatsForScope(),
+    };
+  }
+  const rate = parseSatsRate(satsRateInput?.value);
+  const seconds = getSessionEstimateSeconds();
+  return {
+    scope,
+    seconds,
+    sats: calculateSats({ rate, seconds }),
+  };
+};
+
 const updateAccumulatedSats = () => {
   const sats = getDonationSatsForScope();
   if (currentTotalSats) {
     currentTotalSats.textContent = `${sats} sats`;
+  }
+  if (timerAccumulatedNote) {
+    timerAccumulatedNote.classList.toggle(
+      "hidden",
+      getDonationScopeValue() !== "total"
+    );
   }
   if (donationPageTotal) {
     donationPageTotal.textContent = `${sats} sats`;
@@ -1074,10 +1099,9 @@ const openLightningWalletWithPayload = async (payload, { onSuccess } = {}) => {
 };
 
 const openLightningWallet = async () => {
-  const sats = getDonationSatsForScope();
+  const { sats, seconds: donationSeconds, scope } = getDonationPaymentSnapshot();
   const dataUrl = getBadgeDataUrl();
   const lastSession = getLastSessionSeconds();
-  const donationSeconds = getDonationSeconds();
   const totalDonatedSats = getTotalDonatedSats() + sats;
   const payload = buildDonationPayload({
     dataUrl,
@@ -1086,7 +1110,7 @@ const openLightningWallet = async () => {
     goalMinutes: lastSession.goalMinutes,
     sats,
     donationModeValue: donationMode?.value || "pow-writing",
-    donationScopeValue: donationScope?.value || "total",
+    donationScopeValue: scope,
     donationNoteValue: donationNote?.value?.trim() || "",
     totalDonatedSats,
   });
@@ -1779,10 +1803,9 @@ shareDiscordButton?.addEventListener("click", shareToDiscord);
 todayAccumulatedPay?.addEventListener("click", openAccumulatedDonationPayment);
 
 donateButton?.addEventListener("click", () => {
-  const donationSeconds = getDonationSeconds();
-  const totalMinutes = Math.floor(donationSeconds / 60);
   const mode = donationMode?.value || "pow-writing";
-  const sats = getDonationSatsForScope();
+  const { sats, seconds: donationSeconds, scope } = getDonationPaymentSnapshot();
+  const totalMinutes = Math.floor(donationSeconds / 60);
   const note = donationNote.value.trim();
   const lastSession = getLastSessionSeconds();
   saveDonationHistoryEntry({
@@ -1791,8 +1814,8 @@ donateButton?.addEventListener("click", () => {
     minutes: totalMinutes,
     seconds: donationSeconds,
     mode,
-    scope: donationScope?.value || "total",
-    sessionId: donationScope?.value === "session" ? lastSession.sessionId : "",
+    scope,
+    sessionId: scope === "session" ? lastSession.sessionId : "",
     note,
   });
   donationStatus.textContent = `오늘 ${sats} sats 기부 기록을 저장했습니다.`;
