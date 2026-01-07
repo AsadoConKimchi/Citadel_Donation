@@ -562,6 +562,17 @@ footer {
   gap: 16px;
 }
 
+.wallet-toast {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
 .wallet-modal__header {
   display: flex;
   justify-content: space-between;
@@ -631,6 +642,19 @@ footer {
   justify-content: center;
   background: #0f172a;
   color: #f8fafc;
+}
+
+.wallet-option--link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.wallet-option[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #334155;
+  pointer-events: none;
 }
 
 .wallet-option:hover {
