@@ -72,6 +72,7 @@ const donationHistoryPagination = document.getElementById("donation-history-pagi
 let timerInterval = null;
 let elapsedSeconds = 0;
 let isRunning = false;
+let isResetReady = false;
 let cameraStream = null;
 let photoSource = null;
 let latestDonationPayload = null;
@@ -191,6 +192,13 @@ const setPauseButtonLabel = (label) => {
   pauseButton.textContent = label;
 };
 
+const setResetButtonLabel = (label) => {
+  if (!resetButton) {
+    return;
+  }
+  resetButton.textContent = label;
+};
+
 const openTimerModal = () => {
   if (!timerModal) {
     return;
@@ -230,6 +238,8 @@ const startTimer = () => {
   timerInterval = setInterval(tick, 1000);
   setDonationControlsEnabled(false);
   setPauseButtonLabel("일시정지");
+  setResetButtonLabel("리셋");
+  isResetReady = false;
 };
 
 const pauseTimer = () => {
@@ -493,6 +503,8 @@ const finishSession = () => {
   }
   setDonationControlsEnabled(true);
   closeTimerModal();
+  setResetButtonLabel("리셋");
+  isResetReady = false;
   if (studyCard) {
     studyCard.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -1329,7 +1341,15 @@ pauseButton?.addEventListener("click", () => {
     startTimer();
   }
 });
-resetButton?.addEventListener("click", resetTimer);
+resetButton?.addEventListener("click", () => {
+  if (isResetReady) {
+    startTimer();
+    return;
+  }
+  resetTimer();
+  setResetButtonLabel("재시작");
+  isResetReady = true;
+});
 finishButton?.addEventListener("click", finishSession);
 goalInput?.addEventListener("input", updateTotals);
 if (donationMode) {
