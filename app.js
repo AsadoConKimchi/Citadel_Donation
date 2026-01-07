@@ -706,7 +706,7 @@ const renderDonationHistory = () => {
     entry.className = "history-item";
     const scopeLabels = { session: "회차 별", daily: "하루 단위", total: "누적 후 한번에" };
     const scopeLabel = scopeLabels[item.scope] || "누적";
-  const modeLabel = donationModeLabels[item.mode] || "✒️글쓰기📝";
+    const modeLabel = donationModeLabels[item.mode] || "✒️ㅣ글쓰기";
     entry.innerHTML = `
       <div><strong>${item.date}</strong> · ${scopeLabel} · ${modeLabel}</div>
       <div>기부: <strong>${item.sats} sats</strong> · ${item.minutes}분</div>
@@ -735,12 +735,12 @@ const updateDonationTotals = () => {
 };
 
 const donationModeLabels = {
-  "pow-writing": "✒️글쓰기📝",
-  "pow-reading": "🪽 독서📚",
-  "pow-study": "💻공부💯",
-  "pow-music": "🎼음악🎵",
-  "pow-art": "🎨그림🖼️",
-  "pow-service": "✝️봉사⛪",
+  "pow-writing": "✒️ㅣ글쓰기",
+  "pow-music": "🎵ㅣ음악",
+  "pow-study": "📝ㅣ공부",
+  "pow-art": "🎨ㅣ그림",
+  "pow-reading": "📚ㅣ독서",
+  "pow-service": "✝️ㅣ봉사",
 };
 
 const getDonationHistoryMonths = () => {
