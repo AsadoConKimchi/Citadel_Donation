@@ -16,7 +16,7 @@
       <div class="hero-top">
         <div class="hero-brand">
           <p class="hero-brand-title">CITADEL SCHOLARSHIP</p>
-          <p class="hero-brand-subtitle">학습 기록을 장학금으로 이어주는 스터디 플랫폼</p>
+          <p class="hero-brand-subtitle">Proof of Work:Life of Satoshi</p>
         </div>
         <div class="hero-login" id="discord-card">
           <div class="row hero-login-actions">
@@ -46,21 +46,21 @@
     <main class="locked">
       <section class="grid">
         <div class="card">
-          <h2>학습 타이머</h2>
+          <h2>POW 타이머</h2>
           <div class="stack">
             <label>
-              오늘 목표 공부 시간 (분)
+              POW 시간
               <input id="goal-minutes" type="number" min="1" value="120" />
             </label>
             <label>
-              오늘의 학습 목표
+              오늘의 목표
               <textarea
                 id="study-plan"
                 rows="3"
                 placeholder="예: 스페인어 회화 2과 복습 + 단어 20개 암기"
               ></textarea>
             </label>
-            <p class="hint" id="plan-status">학습 목표는 자동 저장됩니다.</p>
+            <p class="hint" id="plan-status">목표는 자동 저장됩니다.</p>
             <p class="muted">사토시 기부 기준을 공부 시작 전에 설정하세요.</p>
             <label>
               기부 방식
@@ -70,25 +70,30 @@
               </select>
             </label>
             <label>
-              기부 계산 방식
+              기부 그룹 선택
               <select id="donation-mode">
-                <option value="time">공부 시간 기준</option>
-                <option value="pages">페이지 수 기준</option>
-                <option value="problems">문제(단어) 수 기준</option>
-                <option value="other">기타(자유)</option>
+                <option value="bitcoin-social-layer">Bitcoin Social Layer</option>
+                <option value="corn-gang">Corn Gang</option>
+                <option value="palma-guild">Palma Guild</option>
+                <option value="sea-of-corea">Sea of Corea</option>
+                <option value="creative-crew">Creative Crew</option>
+                <option value="satoshi-studio">Satoshi Studio</option>
+                <option value="citadel-entertainment">Citadel Entertainment</option>
+                <option value="genesis-block">Genesis Block</option>
+                <option value="citadel-force">Citadel Force</option>
+                <option value="holy-seed">Holy Seed</option>
+                <option value="language-study">언어공부</option>
+                <option value="bitcoin-global-channel">Bitcoin Global Channel</option>
               </select>
             </label>
             <label>
-              기준 별 기부 사토시 양
-              <span class="unit-input" data-unit="sats">
-                <input id="sats-rate" type="number" min="1" placeholder="예) 10" />
-              </span>
-            </label>
-            <label id="donation-count-field" class="hidden">
-              <span>기준 수량</span>
-              <span class="unit-input" data-unit="">
-                <input id="donation-count" type="number" min="0" placeholder="예) 5" />
-              </span>
+              목표 달성시 기부금
+              <input
+                id="sats-rate"
+                type="text"
+                inputmode="numeric"
+                placeholder="예) 10sats"
+              />
             </label>
             <div class="row">
               <span class="pill">이번 회차 기부 금액: <strong id="sats-total">0 sats</strong></span>
@@ -118,7 +123,7 @@
           </p>
           <div class="stack">
             <label>
-              오늘의 학습 목표 (수정 가능)
+              오늘의 목표 (수정 가능)
               <textarea id="study-plan-preview" rows="2"></textarea>
             </label>
             <div class="row">
@@ -203,7 +208,7 @@
 
     <div id="timer-modal" class="timer-modal hidden" aria-hidden="true">
       <div class="timer-modal__panel" role="dialog" aria-modal="true">
-        <h3>학습 타이머</h3>
+        <h3>POW 타이머</h3>
         <div class="timer-modal__time" id="timer-display">00:00:00</div>
         <p class="timer-modal__note">
           현재 누적 금액: <strong id="current-total-sats">0 sats</strong>
