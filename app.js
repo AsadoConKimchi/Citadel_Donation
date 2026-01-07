@@ -206,6 +206,7 @@ const openTimerModal = () => {
   timerModal.classList.remove("hidden");
   timerModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("timer-modal-open");
+  document.documentElement.classList.add("timer-modal-open");
 };
 
 const closeTimerModal = () => {
@@ -215,6 +216,7 @@ const closeTimerModal = () => {
   timerModal.classList.add("hidden");
   timerModal.setAttribute("aria-hidden", "true");
   document.body.classList.remove("timer-modal-open");
+  document.documentElement.classList.remove("timer-modal-open");
 };
 
 const tick = () => {
@@ -402,9 +404,23 @@ const renderStudyHistoryPage = () => {
   const listEl = document.getElementById("study-history-list");
   const emptyEl = document.getElementById("study-history-empty");
   const currentLabel = document.getElementById("study-history-date");
+  const leaderboardEl = document.getElementById("study-leaderboard");
   if (!dateSelect || !listEl || !emptyEl) {
     return;
   }
+  const totalSeconds = getAllSessionsTotalSeconds();
+  renderLeaderboard({
+    element: leaderboardEl,
+    entries: totalSeconds
+      ? [
+          {
+            name: "나",
+            value: totalSeconds,
+          },
+        ]
+      : [],
+    valueFormatter: (value) => formatMinutesSeconds(value),
+  });
   const dates = getSessionStorageDates();
   dateSelect.innerHTML = "";
   if (!dates.length) {
@@ -513,6 +529,31 @@ const finishSession = () => {
 
 const getDonationHistory = () =>
   JSON.parse(localStorage.getItem(donationHistoryKey) || "[]");
+
+const getTotalDonatedSats = () =>
+  getDonationHistory().reduce((sum, item) => sum + Number(item.sats || 0), 0);
+
+const renderLeaderboard = ({ element, entries, valueFormatter }) => {
+  if (!element) {
+    return;
+  }
+  element.innerHTML = "";
+  const maxCount = 5;
+  const safeEntries = Array.isArray(entries) ? entries.slice(0, maxCount) : [];
+  for (let index = 0; index < maxCount; index += 1) {
+    const entry = safeEntries[index];
+    const item = document.createElement("li");
+    item.className = "leaderboard-item";
+    const rank = index + 1;
+    if (entry) {
+      const valueLabel = valueFormatter ? valueFormatter(entry.value) : String(entry.value);
+      item.innerHTML = `<span>${rank}위 · <strong>${entry.name}</strong></span><span>${valueLabel}</span>`;
+    } else {
+      item.innerHTML = `<span>${rank}위 · <strong>대기 중</strong></span><span>-</span>`;
+    }
+    element.appendChild(item);
+  }
+};
 
 const getDonatedSecondsByScope = ({ scope, dateKey } = {}) => {
   const history = getDonationHistory();
@@ -691,9 +732,23 @@ const renderDonationHistoryPage = () => {
   const listEl = document.getElementById("donation-history-list");
   const emptyEl = document.getElementById("donation-history-empty-page");
   const currentLabel = document.getElementById("donation-history-month");
+  const leaderboardEl = document.getElementById("donation-leaderboard");
   if (!monthSelect || !listEl || !emptyEl) {
     return;
   }
+  const totalSats = getTotalDonatedSats();
+  renderLeaderboard({
+    element: leaderboardEl,
+    entries: totalSats
+      ? [
+          {
+            name: "나",
+            value: totalSats,
+          },
+        ]
+      : [],
+    valueFormatter: (value) => `${value} sats`,
+  });
   const months = getDonationHistoryMonths();
   monthSelect.innerHTML = "";
   if (!months.length) {
