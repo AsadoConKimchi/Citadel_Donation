@@ -20,6 +20,8 @@ const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
 const resetButton = document.getElementById("reset");
 
+const timerModal = document.getElementById("timer-modal");
+
 const discordAppLogin = document.getElementById("discord-app-login");
 const discordWebLogin = document.getElementById("discord-web-login");
 const discordRefresh = document.getElementById("discord-refresh");
@@ -29,7 +31,6 @@ const discordLogout = document.getElementById("discord-logout");
 const mainContent = document.querySelector("main");
 const discordProfile = document.getElementById("discord-profile");
 const discordAvatar = document.getElementById("discord-avatar");
-const discordBanner = document.getElementById("discord-banner");
 const discordUsername = document.getElementById("discord-username");
 const discordGuild = document.getElementById("discord-guild");
 const allowedServer = document.getElementById("allowed-server");
@@ -48,6 +49,7 @@ const snapshotCanvas = document.getElementById("snapshot");
 const photoPreview = document.getElementById("photo-preview");
 const badgeCanvas = document.getElementById("badge");
 const downloadLink = document.getElementById("download");
+const studyCard = document.getElementById("study-card");
 
 const donationNote = document.getElementById("donation-note");
 const donateButton = document.getElementById("donate");
@@ -70,6 +72,7 @@ const donationHistoryPagination = document.getElementById("donation-history-pagi
 let timerInterval = null;
 let elapsedSeconds = 0;
 let isRunning = false;
+let isResetReady = false;
 let cameraStream = null;
 let photoSource = null;
 let latestDonationPayload = null;
@@ -182,6 +185,40 @@ const updateDisplay = () => {
   timerDisplay.textContent = formatTime(elapsedSeconds);
 };
 
+const setPauseButtonLabel = (label) => {
+  if (!pauseButton) {
+    return;
+  }
+  pauseButton.textContent = label;
+};
+
+const setResetButtonLabel = (label) => {
+  if (!resetButton) {
+    return;
+  }
+  resetButton.textContent = label;
+};
+
+const openTimerModal = () => {
+  if (!timerModal) {
+    return;
+  }
+  timerModal.classList.remove("hidden");
+  timerModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("timer-modal-open");
+  document.documentElement.classList.add("timer-modal-open");
+};
+
+const closeTimerModal = () => {
+  if (!timerModal) {
+    return;
+  }
+  timerModal.classList.add("hidden");
+  timerModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("timer-modal-open");
+  document.documentElement.classList.remove("timer-modal-open");
+};
+
 const tick = () => {
   elapsedSeconds += 1;
   updateDisplay();
@@ -202,6 +239,9 @@ const startTimer = () => {
   isRunning = true;
   timerInterval = setInterval(tick, 1000);
   setDonationControlsEnabled(false);
+  setPauseButtonLabel("일시정지");
+  setResetButtonLabel("리셋");
+  isResetReady = false;
 };
 
 const pauseTimer = () => {
@@ -210,6 +250,7 @@ const pauseTimer = () => {
   }
   isRunning = false;
   clearInterval(timerInterval);
+  setPauseButtonLabel("재개");
 };
 
 const resetTimer = () => {
@@ -218,6 +259,7 @@ const resetTimer = () => {
   updateDisplay();
   updateSats();
   setDonationControlsEnabled(true);
+  setPauseButtonLabel("일시정지");
 };
 
 const getPlanValue = () => {
@@ -362,9 +404,23 @@ const renderStudyHistoryPage = () => {
   const listEl = document.getElementById("study-history-list");
   const emptyEl = document.getElementById("study-history-empty");
   const currentLabel = document.getElementById("study-history-date");
+  const leaderboardEl = document.getElementById("study-leaderboard");
   if (!dateSelect || !listEl || !emptyEl) {
     return;
   }
+  const totalSeconds = getAllSessionsTotalSeconds();
+  renderLeaderboard({
+    element: leaderboardEl,
+    entries: totalSeconds
+      ? [
+          {
+            name: "나",
+            value: totalSeconds,
+          },
+        ]
+      : [],
+    valueFormatter: (value) => formatMinutesSeconds(value),
+  });
   const dates = getSessionStorageDates();
   dateSelect.innerHTML = "";
   if (!dates.length) {
@@ -462,11 +518,42 @@ const finishSession = () => {
     drawBadge();
   }
   setDonationControlsEnabled(true);
+  closeTimerModal();
+  setResetButtonLabel("리셋");
+  isResetReady = false;
+  if (studyCard) {
+    studyCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   openCameraButton?.focus();
 };
 
 const getDonationHistory = () =>
   JSON.parse(localStorage.getItem(donationHistoryKey) || "[]");
+
+const getTotalDonatedSats = () =>
+  getDonationHistory().reduce((sum, item) => sum + Number(item.sats || 0), 0);
+
+const renderLeaderboard = ({ element, entries, valueFormatter }) => {
+  if (!element) {
+    return;
+  }
+  element.innerHTML = "";
+  const maxCount = 5;
+  const safeEntries = Array.isArray(entries) ? entries.slice(0, maxCount) : [];
+  for (let index = 0; index < maxCount; index += 1) {
+    const entry = safeEntries[index];
+    const item = document.createElement("li");
+    item.className = "leaderboard-item";
+    const rank = index + 1;
+    if (entry) {
+      const valueLabel = valueFormatter ? valueFormatter(entry.value) : String(entry.value);
+      item.innerHTML = `<span>${rank}위 · <strong>${entry.name}</strong></span><span>${valueLabel}</span>`;
+    } else {
+      item.innerHTML = `<span>${rank}위 · <strong>대기 중</strong></span><span>-</span>`;
+    }
+    element.appendChild(item);
+  }
+};
 
 const getDonatedSecondsByScope = ({ scope, dateKey } = {}) => {
   const history = getDonationHistory();
@@ -645,9 +732,23 @@ const renderDonationHistoryPage = () => {
   const listEl = document.getElementById("donation-history-list");
   const emptyEl = document.getElementById("donation-history-empty-page");
   const currentLabel = document.getElementById("donation-history-month");
+  const leaderboardEl = document.getElementById("donation-leaderboard");
   if (!monthSelect || !listEl || !emptyEl) {
     return;
   }
+  const totalSats = getTotalDonatedSats();
+  renderLeaderboard({
+    element: leaderboardEl,
+    entries: totalSats
+      ? [
+          {
+            name: "나",
+            value: totalSats,
+          },
+        ]
+      : [],
+    valueFormatter: (value) => `${value} sats`,
+  });
   const months = getDonationHistoryMonths();
   monthSelect.innerHTML = "";
   if (!months.length) {
@@ -1108,9 +1209,6 @@ const updateDiscordProfile = ({ user, guild, authorized }) => {
   const avatarUrl = user?.avatar
     ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
     : "https://cdn.discordapp.com/embed/avatars/0.png";
-  const bannerUrl = user?.banner
-    ? `https://cdn.discordapp.com/banners/${user.id}/${user.banner}.png?size=480`
-    : "";
   discordAvatar.src = avatarUrl;
   discordAvatar.alt = user?.username ? `${user.username} avatar` : "Discord avatar";
   discordAvatar.classList.remove("status-ok", "status-pending");
@@ -1119,8 +1217,6 @@ const updateDiscordProfile = ({ user, guild, authorized }) => {
   } else if (authorized === false) {
     discordAvatar.classList.add("status-pending");
   }
-  discordBanner.style.backgroundImage = bannerUrl ? `url(${bannerUrl})` : "";
-  discordBanner.style.backgroundSize = "cover";
   discordUsername.textContent = user?.username ?? "로그인된 사용자 없음";
   if (discordGuild) {
     const guildName = guild?.name ?? "-";
@@ -1289,9 +1385,26 @@ discordLogout?.addEventListener("click", async () => {
   window.location.reload();
 });
 
-startButton?.addEventListener("click", startTimer);
-pauseButton?.addEventListener("click", pauseTimer);
-resetButton?.addEventListener("click", resetTimer);
+startButton?.addEventListener("click", () => {
+  openTimerModal();
+  startTimer();
+});
+pauseButton?.addEventListener("click", () => {
+  if (isRunning) {
+    pauseTimer();
+  } else if (elapsedSeconds > 0) {
+    startTimer();
+  }
+});
+resetButton?.addEventListener("click", () => {
+  if (isResetReady) {
+    startTimer();
+    return;
+  }
+  resetTimer();
+  setResetButtonLabel("재시작");
+  isResetReady = true;
+});
 finishButton?.addEventListener("click", finishSession);
 goalInput?.addEventListener("input", updateTotals);
 if (donationMode) {
