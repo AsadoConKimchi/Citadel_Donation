@@ -75,6 +75,8 @@ let isRunning = false;
 let isResetReady = false;
 let photoSource = null;
 let mediaPreviewUrl = null;
+let selectedVideoDataUrl = null;
+let selectedVideoFilename = "";
 let latestDonationPayload = null;
 let sessionPage = 1;
 let donationPage = 1;
@@ -932,6 +934,8 @@ const buildDonationPayload = ({
     wordCount: count,
     donationNote: donationNoteValue || "",
     username: loginUserName?.textContent || "",
+    videoDataUrl: selectedVideoDataUrl,
+    videoFilename: selectedVideoFilename,
   };
 };
 
@@ -1425,6 +1429,8 @@ const resetMediaPreview = () => {
     URL.revokeObjectURL(mediaPreviewUrl);
     mediaPreviewUrl = null;
   }
+  selectedVideoDataUrl = null;
+  selectedVideoFilename = "";
   photoSource = null;
   photoPreview.src = "";
   photoPreview.style.display = "none";
@@ -1435,6 +1441,14 @@ const resetMediaPreview = () => {
   cameraVideo.load();
   cameraVideo.style.display = "none";
 };
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("file-read-failed"));
+    reader.readAsDataURL(file);
+  });
 
 const loadVideoThumbnail = (file) =>
   new Promise((resolve, reject) => {
@@ -1486,6 +1500,9 @@ const handleMediaFile = async (file) => {
   resetMediaPreview();
   if (file.type.startsWith("video/")) {
     try {
+      const dataUrl = await readFileAsDataUrl(file);
+      selectedVideoDataUrl = dataUrl;
+      selectedVideoFilename = file.name || "study-video";
       await loadVideoThumbnail(file);
       photoSource = photoPreview;
     } catch (error) {
