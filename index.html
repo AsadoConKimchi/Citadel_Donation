@@ -9,7 +9,7 @@
   <body>
     <nav class="site-nav">
       <a href="index.html" class="active">오늘</a>
-      <a href="study-history.html">공부 기록</a>
+      <a href="study-history.html">POW 기록</a>
       <a href="donation-history.html">기부 기록</a>
     </nav>
     <header class="hero">
@@ -49,7 +49,7 @@
           <h2>POW 타이머</h2>
           <div class="stack">
             <label>
-              POW 시간
+              POW 시간(단위 : 분)
               <input id="goal-minutes" type="number" min="1" value="120" />
             </label>
             <label>
@@ -61,7 +61,7 @@
               ></textarea>
             </label>
             <p class="hint" id="plan-status">목표는 자동 저장됩니다.</p>
-            <p class="muted">사토시 기부 기준을 공부 시작 전에 설정하세요.</p>
+            <p class="muted">사토시 기부 기준을 POW 시작 전에 설정하세요.</p>
             <label>
               기부 방식
               <select id="donation-scope">
@@ -70,20 +70,14 @@
               </select>
             </label>
             <label>
-              기부 그룹 선택
+              POW 분야 선택
               <select id="donation-mode">
-                <option value="bitcoin-social-layer">Bitcoin Social Layer</option>
-                <option value="corn-gang">Corn Gang</option>
-                <option value="palma-guild">Palma Guild</option>
-                <option value="sea-of-corea">Sea of Corea</option>
-                <option value="creative-crew">Creative Crew</option>
-                <option value="satoshi-studio">Satoshi Studio</option>
-                <option value="citadel-entertainment">Citadel Entertainment</option>
-                <option value="genesis-block">Genesis Block</option>
-                <option value="citadel-force">Citadel Force</option>
-                <option value="holy-seed">Holy Seed</option>
-                <option value="language-study">언어공부</option>
-                <option value="bitcoin-global-channel">Bitcoin Global Channel</option>
+                <option value="pow-writing">✒️ㅣ글쓰기</option>
+                <option value="pow-music">🎵ㅣ음악</option>
+                <option value="pow-study">📝ㅣ공부</option>
+                <option value="pow-art">🎨ㅣ그림</option>
+                <option value="pow-reading">📚ㅣ독서</option>
+                <option value="pow-service">✝️ㅣ봉사</option>
               </select>
             </label>
             <label>
@@ -95,17 +89,19 @@
                 placeholder="예) 10sats"
               />
             </label>
-            <div class="row">
-              <span class="pill">이번 회차 기부 금액: <strong id="sats-total">0 sats</strong></span>
-              <span class="pill">누적 기부 금액: <strong id="sats-total-all">0 sats</strong></span>
+            <div class="row donation-summary">
+              <span class="pill">
+                현재까지 적립금액 : <strong id="sats-total">0 sats</strong>
+              </span>
+              <span class="pill">누적 기부금액 : <strong id="sats-total-all">0 sats</strong></span>
             </div>
             <div class="row">
               <button id="start" class="primary">시작</button>
             </div>
             <div class="session-list">
-              <p class="session-title">오늘 공부 기록</p>
+              <p class="session-title">오늘 POW 기록</p>
               <div id="session-list" class="session-items"></div>
-              <p id="session-empty" class="hint">아직 저장된 공부 기록이 없습니다.</p>
+              <p id="session-empty" class="hint">아직 저장된 POW 기록이 없습니다.</p>
               <div id="session-pagination" class="pagination"></div>
             </div>
             <div class="row">
@@ -116,10 +112,10 @@
         </div>
 
         <div class="card" id="study-card">
-          <h2>공부 인증 카드 만들기</h2>
+          <h2>POW 인증 카드 만들기</h2>
           <p class="muted">
-            카메라로 촬영하거나 사진을 업로드한 뒤, 학습 언어와 시간을 표시한 인증 이미지를
-            생성합니다.
+            카메라로 촬영하거나, 사진/동영상을 업로드 한 뒤, POW 내용과 시간, 목표 달성율을
+            표시한 인증 카드를 생성합니다.
           </p>
           <div class="stack">
             <label>
@@ -154,7 +150,7 @@
             </div>
             <label>
               기부 메모 (선택)
-              <input id="donation-note" placeholder="예: 누적 공부 2시간 달성" />
+              <input id="donation-note" placeholder="예: 누적 POW 2시간 달성" />
             </label>
             <button id="share-discord" class="primary">디스코드에 공유 &amp; 사토시 기부</button>
             <button id="donate" class="primary">기부 기록 저장</button>
@@ -176,9 +172,10 @@
         </div>
       </section>
     </main>
+    <div id="accumulation-toast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <footer>
-      <p>Citadel Scholarship · 학습 기록이 장학금으로 이어집니다.</p>
+      <p>Citadel Scholarship · POW 기록이 장학금으로 이어집니다.</p>
     </footer>
 
     <div id="wallet-modal" class="wallet-modal hidden" aria-hidden="true">
@@ -216,7 +213,7 @@
         <div class="row timer-modal__actions">
           <button id="pause" class="ghost">일시정지</button>
           <button id="reset" class="ghost">리셋</button>
-          <button id="finish" class="accent">공부 종료</button>
+          <button id="finish" class="accent">POW 종료</button>
         </div>
       </div>
     </div>
