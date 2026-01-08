@@ -519,26 +519,36 @@ app.get("/auth/discord/callback", async (req, res) => {
     const roles = member.roles || [];
     const authorized = roles.includes(DISCORD_ROLE_ID);
 
-    req.session.user = {
-      id: user.id,
-      username: user.global_name || user.username,
-      avatar: user.avatar,
-      banner: user.banner,
-    };
-    req.session.guild = {
-      id: DISCORD_GUILD_ID,
-      name: DISCORD_GUILD_NAME,
-      roles,
-      roleName: DISCORD_ROLE_NAME || null,
-    };
-    req.session.authorized = authorized;
-
-    req.session.save(() => {
-      if (!authorized) {
-        res.redirect("/?unauthorized=1");
+    req.session.regenerate((regenerateError) => {
+      if (regenerateError) {
+        res.status(500).send("Discord 인증 중 오류가 발생했습니다.");
         return;
       }
-      res.redirect("/");
+      req.session.user = {
+        id: user.id,
+        username: user.global_name || user.username,
+        avatar: user.avatar,
+        banner: user.banner,
+      };
+      req.session.guild = {
+        id: DISCORD_GUILD_ID,
+        name: DISCORD_GUILD_NAME,
+        roles,
+        roleName: DISCORD_ROLE_NAME || null,
+      };
+      req.session.authorized = authorized;
+
+      req.session.save((saveError) => {
+        if (saveError) {
+          res.status(500).send("Discord 인증 중 오류가 발생했습니다.");
+          return;
+        }
+        if (!authorized) {
+          res.redirect("/?unauthorized=1");
+          return;
+        }
+        res.redirect("/");
+      });
     });
   } catch (error) {
     res.status(500).send("Discord 인증 중 오류가 발생했습니다.");
