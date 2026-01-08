@@ -30,6 +30,7 @@ const {
 const discordClientId = (DISCORD_CLIENT_ID || "").trim();
 const discordClientSecret = (DISCORD_CLIENT_SECRET || "").trim();
 const discordRedirectUri = (DISCORD_REDIRECT_URI || "").trim();
+const isSecureRedirect = discordRedirectUri.startsWith("https://");
 
 const isDiscordClientIdValid = (value) => /^\d{17,20}$/.test(String(value || "").trim());
 
@@ -45,6 +46,10 @@ const hasDiscordConfig =
   DISCORD_ROLE_ID;
 
 app.use(express.json({ limit: "10mb" }));
+if (isSecureRedirect) {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   session({
     secret: SESSION_SECRET || "citadel-idioma-secret",
@@ -52,7 +57,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: isSecureRedirect ? "none" : "lax",
+      secure: isSecureRedirect,
     },
   })
 );
