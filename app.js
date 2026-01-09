@@ -1542,7 +1542,12 @@ const openLightningWalletWithPayload = async (payload, { onSuccess } = {}) => {
 
 const openLightningWallet = async () => {
   const { sats, seconds: donationSeconds, scope } = getDonationPaymentSnapshot();
-  const dataUrl = getBadgeDataUrl();
+  let dataUrl = getBadgeDataUrl();
+  // 인증카드가 생성되지 않았으면 자동으로 생성 (기본 배경 이미지 사용)
+  if (!dataUrl || dataUrl === "data:,") {
+    drawBadge();
+    dataUrl = getBadgeDataUrl();
+  }
   const lastSession = getLastSessionSeconds();
   const totalDonatedSats = getTotalDonatedSats() + sats;
   const totalMinutes = Math.floor(donationSeconds / 60);
@@ -1591,7 +1596,12 @@ const openAccumulatedDonationPayment = async () => {
     alert("기부할 적립 금액이 없습니다.");
     return;
   }
-  const dataUrl = getBadgeDataUrl();
+  let dataUrl = getBadgeDataUrl();
+  // 인증카드가 생성되지 않았으면 자동으로 생성 (기본 배경 이미지 사용)
+  if (!dataUrl || dataUrl === "data:,") {
+    drawBadge();
+    dataUrl = getBadgeDataUrl();
+  }
   const lastSession = getLastSessionSeconds();
   const totalMinutes = Math.floor(donationSeconds / 60);
   const mode = donationMode?.value || "pow-writing";
@@ -2323,9 +2333,15 @@ const getBadgeDataUrl = () => {
 };
 
 const shareToDiscordOnly = async () => {
-  const dataUrl = getBadgeDataUrl();
+  let dataUrl = getBadgeDataUrl();
+  // 인증카드가 생성되지 않았으면 자동으로 생성 (기본 배경 이미지 사용)
   if (!dataUrl || dataUrl === "data:,") {
-    alert("먼저 인증 카드를 생성해주세요.");
+    drawBadge();
+    dataUrl = getBadgeDataUrl();
+  }
+  // 그래도 생성되지 않으면 오류
+  if (!dataUrl || dataUrl === "data:,") {
+    alert("인증 카드를 생성할 수 없습니다.");
     return;
   }
   if (shareStatus) {
