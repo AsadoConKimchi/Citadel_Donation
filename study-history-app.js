@@ -109,10 +109,15 @@ const renderMyRecords = async () => {
 
     if (dates.length > 0) {
       studyDateSelect.value = dates[0];
+      studyHistoryEmpty.classList.add("hidden");
       renderSessionsForDate(dates[0], sessionsByDate);
     } else {
-      studyHistoryList.innerHTML = "";
+      studyDateSelect.innerHTML = '<option value="">날짜 없음</option>';
+      carouselContainer.classList.add("hidden");
       studyHistoryEmpty.classList.remove("hidden");
+      studyHistoryEmpty.textContent = currentCategory === "all"
+        ? "아직 POW 기록이 없습니다."
+        : "선택한 분야의 POW 기록이 없습니다. 새 POW 세션부터 분야별 필터링이 가능합니다.";
     }
 
     // 누적 시간 계산
