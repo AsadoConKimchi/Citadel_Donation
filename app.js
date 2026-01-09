@@ -94,6 +94,8 @@ let donationHistoryPage = 1;
 const pendingDailyKey = "citadel-pending-daily";
 let hasPromptedDaily = false;
 let walletToastTimeout = null;
+let currentDiscordId = null; // 현재 로그인한 사용자의 Discord ID
+let pendingDailyCache = null; // API 호출 결과 캐시
 
 const donationControls = [
   donationScope,
@@ -290,18 +292,93 @@ const normalizeInvoice = (invoice) => {
 
 const getLightningUri = (invoice) => `lightning:${normalizeInvoice(invoice)}`;
 
+// 적립액 데이터 가져오기 (동기, 캐시 사용)
 const getPendingDaily = () => {
+  // 캐시가 있으면 반환
+  if (pendingDailyCache !== null) {
+    return pendingDailyCache;
+  }
+
+  // 캐시가 없으면 localStorage에서 가져오기
   try {
     const raw = localStorage.getItem(pendingDailyKey);
     const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const result = parsed && typeof parsed === "object" ? parsed : {};
+    pendingDailyCache = result;
+    return result;
   } catch (error) {
+    pendingDailyCache = {};
     return {};
   }
 };
 
-const savePendingDaily = (pending) => {
+// 적립액 데이터를 API에서 로드 (비동기, 초기화 시 호출)
+const loadPendingDailyFromAPI = async () => {
+  if (!currentDiscordId || typeof AccumulatedSatsAPI === 'undefined') {
+    return;
+  }
+
+  try {
+    const response = await AccumulatedSatsAPI.get(currentDiscordId, todayKey);
+    if (response.success && response.data) {
+      // API 응답을 기존 형식으로 변환
+      const result = {};
+      result[todayKey] = {
+        seconds: response.data.total_seconds,
+        sats: response.data.total_sats,
+        plan: response.data.plan_text || "",
+        goalMinutes: response.data.goal_minutes || 0,
+        mode: response.data.donation_mode || "pow-writing",
+        note: response.data.note || "",
+      };
+      pendingDailyCache = result;
+      // localStorage에도 저장 (폴백용)
+      localStorage.setItem(pendingDailyKey, JSON.stringify(result));
+      console.log('API에서 적립액 로드 완료');
+    } else {
+      // 데이터가 없는 경우
+      pendingDailyCache = {};
+    }
+  } catch (error) {
+    console.error('API에서 적립액 가져오기 실패:', error);
+  }
+};
+
+// 적립액 데이터 저장 (API 또는 localStorage)
+const savePendingDaily = async (pending) => {
+  // localStorage에 항상 저장 (폴백용)
   localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
+
+  // 로그인한 경우 API에도 저장
+  if (currentDiscordId && typeof AccumulatedSatsAPI !== 'undefined') {
+    const entry = pending[todayKey];
+    if (entry) {
+      try {
+        await AccumulatedSatsAPI.upsert(currentDiscordId, todayKey, {
+          totalSeconds: entry.seconds || 0,
+          totalSats: entry.sats || 0,
+          planText: entry.plan || null,
+          goalMinutes: entry.goalMinutes || null,
+          donationMode: entry.mode || "pow-writing",
+          note: entry.note || null,
+        });
+        pendingDailyCache = pending;
+      } catch (error) {
+        console.error('API에 적립액 저장 실패:', error);
+        // 실패해도 localStorage에는 저장되어 있음
+      }
+    } else {
+      // entry가 없으면 삭제
+      try {
+        await AccumulatedSatsAPI.delete(currentDiscordId, todayKey);
+        pendingDailyCache = pending;
+      } catch (error) {
+        console.error('API에서 적립액 삭제 실패:', error);
+      }
+    }
+  } else {
+    pendingDailyCache = pending;
+  }
 };
 
 const updateTotals = () => {
@@ -1759,6 +1836,18 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     const guildName = guild?.name ?? "citadel.sx";
     allowedServer.textContent = `접속 가능 서버: ${guildName}`;
   }
+
+  // 로그인한 사용자의 Discord ID 설정 및 적립액 로드
+  if (user && user.id) {
+    currentDiscordId = user.id;
+    // API에서 적립액 로드
+    loadPendingDailyFromAPI().then(() => {
+      // 로드 완료 후 UI 업데이트
+      updateAccumulatedSats();
+      updateTodayDonationSummary();
+    });
+  }
+
   if (!hasPromptedDaily) {
     hasPromptedDaily = true;
     promptPendingDailyDonation();

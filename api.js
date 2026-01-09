@@ -201,6 +201,45 @@ const RankingAPI = {
 };
 
 /**
+ * 적립 사토시 API
+ */
+const AccumulatedSatsAPI = {
+  // 특정 날짜의 적립액 조회
+  async get(discordId, date) {
+    return apiRequest(`/api/accumulated-sats/${discordId}/${date}`);
+  },
+
+  // 적립액 생성/업데이트
+  async upsert(discordId, date, data) {
+    return apiRequest('/api/accumulated-sats', {
+      method: 'POST',
+      body: JSON.stringify({
+        discord_id: discordId,
+        date,
+        total_seconds: data.totalSeconds,
+        total_sats: data.totalSats,
+        plan_text: data.planText,
+        goal_minutes: data.goalMinutes,
+        donation_mode: data.donationMode,
+        note: data.note,
+      }),
+    });
+  },
+
+  // 적립액 삭제 (기부 완료 시)
+  async delete(discordId, date) {
+    return apiRequest(`/api/accumulated-sats/${discordId}/${date}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // 사용자의 모든 적립액 조회
+  async getAll(discordId) {
+    return apiRequest(`/api/accumulated-sats/${discordId}`);
+  },
+};
+
+/**
  * localStorage 데이터를 백엔드로 마이그레이션
  */
 async function migrateLocalStorageToBackend(discordId) {
