@@ -59,6 +59,7 @@ app.use(
       httpOnly: true,
       sameSite: isSecureRedirect ? "none" : "lax",
       secure: isSecureRedirect,
+      maxAge: 1000 * 60 * 60 * 24 * 30, // 30일 (밀리초 단위)
     },
   })
 );
