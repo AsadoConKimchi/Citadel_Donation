@@ -821,6 +821,11 @@ const finishSession = () => {
       }
     }
 
+    // POW 분야 이모지 가져오기
+    const currentMode = donationMode?.value || "pow-writing";
+    const modeEmoji = getCategoryLabel(currentMode);
+    const planWithCategory = modeEmoji ? `${modeEmoji} ${plan}` : plan;
+
     // 현재 로그인한 사용자 정보 가져오기
     fetch('/api/session')
       .then(res => res.json())
@@ -830,7 +835,7 @@ const finishSession = () => {
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
             durationMinutes: Math.round(elapsedSeconds / 60),
-            planText: plan,
+            planText: planWithCategory,
             photoUrl: photoDataUrl,
           });
         }
@@ -1224,6 +1229,19 @@ const donationModeLabels = {
   "pow-art": "🎨ㅣ그림",
   "pow-reading": "📚ㅣ독서",
   "pow-service": "✝️ㅣ봉사",
+};
+
+// POW 카테고리 이모지만 가져오기
+const getCategoryLabel = (category) => {
+  const labels = {
+    "pow-writing": "✒️",
+    "pow-music": "🎵",
+    "pow-study": "📝",
+    "pow-art": "🎨",
+    "pow-reading": "📚",
+    "pow-service": "✝️",
+  };
+  return labels[category] || "";
 };
 
 const getDonationHistoryMonths = () => {
@@ -2534,6 +2552,7 @@ const loadSession = async ({ ignoreUrlFlag = false } = {}) => {
 // 기본 배경 이미지 로드
 const loadDefaultBackgroundImage = () => {
   const img = new Image();
+  img.crossOrigin = "anonymous"; // CORS 허용
   img.onload = () => {
     defaultBackgroundImage = img;
     console.log("✅ 기본 배경 이미지 로드 완료:", img.src, "크기:", img.width, "x", img.height);
@@ -2542,7 +2561,8 @@ const loadDefaultBackgroundImage = () => {
     console.error("❌ 기본 배경 이미지 로드 실패:", img.src, e);
     console.warn("⚠️ 그라디언트 배경을 사용합니다.");
   };
-  img.src = "./default-background.jpg";
+  // GitHub raw URL 사용 (더 안정적)
+  img.src = "https://raw.githubusercontent.com/AsadoConKimchi/Citadel_POW/main/default-background.jpg";
   console.log("🔄 기본 배경 이미지 로드 시작:", img.src);
 };
 
