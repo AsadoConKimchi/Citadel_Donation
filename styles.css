@@ -911,6 +911,100 @@ body.timer-modal-open {
   color: #111827;
 }
 
+/* Carousel styles */
+.pow-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.carousel-viewport {
+  flex: 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.carousel-track {
+  display: flex;
+  transition: transform 0.3s ease-in-out;
+}
+
+.carousel-card {
+  min-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.pow-badge-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.pow-text-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pow-text-time {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pow-text-plan {
+  font-size: 16px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.carousel-btn {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 24px;
+  color: #111827;
+  transition: all 0.2s;
+}
+
+.carousel-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #d1d5db;
+}
+
+.carousel-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.carousel-indicator {
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
 @media (max-width: 640px) {
   header.hero {
     padding: 40px 6vw 28px;
@@ -918,5 +1012,24 @@ body.timer-modal-open {
 
   main {
     padding: 28px 6vw 110px;
+  }
+
+  .carousel-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+
+  .pow-text-card {
+    padding: 30px 15px;
+    min-height: 150px;
+  }
+
+  .pow-text-time {
+    font-size: 24px;
+  }
+
+  .pow-text-plan {
+    font-size: 14px;
   }
 }

@@ -59,7 +59,19 @@
                 <p class="hint">
                   선택한 날짜: <strong id="study-history-date">-</strong>
                 </p>
-                <div id="study-history-list" class="session-items"></div>
+
+                <!-- Carousel -->
+                <div id="pow-carousel-container" class="hidden">
+                  <div class="pow-carousel">
+                    <button class="carousel-btn carousel-btn-prev" id="carousel-prev">‹</button>
+                    <div class="carousel-viewport">
+                      <div class="carousel-track" id="carousel-track"></div>
+                    </div>
+                    <button class="carousel-btn carousel-btn-next" id="carousel-next">›</button>
+                  </div>
+                  <div class="carousel-indicator" id="carousel-indicator"></div>
+                </div>
+
                 <p id="study-history-empty" class="hint">선택한 날짜의 공부 기록이 없습니다.</p>
               </div>
             </div>

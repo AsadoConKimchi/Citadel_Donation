@@ -9,14 +9,22 @@ const myStudyLeaderboard = document.getElementById("my-study-leaderboard");
 const popularLeaderboard = document.getElementById("popular-leaderboard");
 const studyDateSelect = document.getElementById("study-date-select");
 const studyHistoryDate = document.getElementById("study-history-date");
-const studyHistoryList = document.getElementById("study-history-list");
 const studyHistoryEmpty = document.getElementById("study-history-empty");
 const popularRecordsList = document.getElementById("popular-records-list");
 const popularRecordsEmpty = document.getElementById("popular-records-empty");
 
+// Carousel 요소
+const carouselContainer = document.getElementById("pow-carousel-container");
+const carouselTrack = document.getElementById("carousel-track");
+const carouselPrev = document.getElementById("carousel-prev");
+const carouselNext = document.getElementById("carousel-next");
+const carouselIndicator = document.getElementById("carousel-indicator");
+
 let currentTab = "my-records";
 let currentCategory = "all";
 let currentUser = null;
+let currentSessions = [];
+let currentIndex = 0;
 
 // 세션 정보 로드
 const loadSession = async () => {
@@ -124,30 +132,87 @@ const renderMyRecords = async () => {
   }
 };
 
-// 선택한 날짜의 세션 렌더링
+// 선택한 날짜의 세션 렌더링 (Carousel)
 const renderSessionsForDate = (date, sessionsByDate) => {
   studyHistoryDate.textContent = date;
   const sessions = sessionsByDate[date] || [];
 
   if (sessions.length === 0) {
-    studyHistoryList.innerHTML = "";
+    carouselContainer.classList.add("hidden");
     studyHistoryEmpty.classList.remove("hidden");
     return;
   }
 
   studyHistoryEmpty.classList.add("hidden");
-  studyHistoryList.innerHTML = sessions
-    .map(session => {
+  carouselContainer.classList.remove("hidden");
+  currentSessions = sessions;
+  currentIndex = 0;
+  renderCarousel();
+};
+
+// Carousel 렌더링
+const renderCarousel = () => {
+  if (currentSessions.length === 0) return;
+
+  // 카드 렌더링
+  carouselTrack.innerHTML = currentSessions
+    .map((session, index) => {
+      const photoUrl = session.photo_url;
       const minutes = session.duration_minutes || 0;
       const plan = session.plan_text || "계획 없음";
-      return `
-        <div class="session-item">
-          <div class="session-time">${minutes}분</div>
-          <div class="session-plan">${plan}</div>
-        </div>
-      `;
+
+      if (photoUrl && photoUrl !== "data:,") {
+        // 인증카드 이미지가 있으면 이미지 표시
+        return `
+          <div class="carousel-card ${index === currentIndex ? 'active' : ''}" data-index="${index}">
+            <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" />
+          </div>
+        `;
+      } else {
+        // 인증카드 이미지가 없으면 텍스트 표시
+        return `
+          <div class="carousel-card ${index === currentIndex ? 'active' : ''}" data-index="${index}">
+            <div class="pow-text-card">
+              <div class="pow-text-time">${minutes}분</div>
+              <div class="pow-text-plan">${plan}</div>
+            </div>
+          </div>
+        `;
+      }
     })
     .join("");
+
+  // 인디케이터 렌더링
+  carouselIndicator.textContent = `${currentIndex + 1} / ${currentSessions.length}`;
+
+  // 버튼 상태 업데이트
+  carouselPrev.disabled = currentIndex === 0;
+  carouselNext.disabled = currentIndex === currentSessions.length - 1;
+
+  // 슬라이드 위치 업데이트
+  updateCarouselPosition();
+};
+
+// Carousel 위치 업데이트
+const updateCarouselPosition = () => {
+  const offset = -currentIndex * 100;
+  carouselTrack.style.transform = `translateX(${offset}%)`;
+};
+
+// 이전 카드로 이동
+const showPrevCard = () => {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderCarousel();
+  }
+};
+
+// 다음 카드로 이동
+const showNextCard = () => {
+  if (currentIndex < currentSessions.length - 1) {
+    currentIndex++;
+    renderCarousel();
+  }
 };
 
 // 인기 기록 렌더링 (디스코드 반응 수 기준)
@@ -179,6 +244,34 @@ const getCategoryLabel = (category) => {
   return labels[category] || "";
 };
 
+// 터치 스와이프 지원
+let touchStartX = 0;
+let touchEndX = 0;
+
+const handleTouchStart = (e) => {
+  touchStartX = e.changedTouches[0].screenX;
+};
+
+const handleTouchEnd = (e) => {
+  touchEndX = e.changedTouches[0].screenX;
+  handleSwipe();
+};
+
+const handleSwipe = () => {
+  const swipeThreshold = 50;
+  const diff = touchStartX - touchEndX;
+
+  if (Math.abs(diff) > swipeThreshold) {
+    if (diff > 0) {
+      // 왼쪽으로 스와이프 = 다음 카드
+      showNextCard();
+    } else {
+      // 오른쪽으로 스와이프 = 이전 카드
+      showPrevCard();
+    }
+  }
+};
+
 // 이벤트 리스너
 tabButtons.forEach(button => {
   button.addEventListener("click", () => {
@@ -200,6 +293,25 @@ studyDateSelect?.addEventListener("change", (e) => {
   // 현재 로드된 sessionsByDate 재사용 필요
   // 간단하게 재렌더링
   renderMyRecords();
+});
+
+// Carousel 버튼 이벤트
+carouselPrev?.addEventListener("click", showPrevCard);
+carouselNext?.addEventListener("click", showNextCard);
+
+// 터치 스와이프 이벤트
+carouselContainer?.addEventListener("touchstart", handleTouchStart, false);
+carouselContainer?.addEventListener("touchend", handleTouchEnd, false);
+
+// 키보드 화살표 이벤트
+document.addEventListener("keydown", (e) => {
+  if (carouselContainer && !carouselContainer.classList.contains("hidden")) {
+    if (e.key === "ArrowLeft") {
+      showPrevCard();
+    } else if (e.key === "ArrowRight") {
+      showNextCard();
+    }
+  }
 });
 
 // 초기화

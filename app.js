@@ -807,6 +807,19 @@ const finishSession = () => {
     const endTime = new Date(sessionTimestamp);
     const startTime = new Date(endTime.getTime() - elapsedSeconds * 1000);
 
+    // 인증카드 이미지 가져오기
+    let photoDataUrl = null;
+    if (typeof getBadgeDataUrl === 'function') {
+      photoDataUrl = getBadgeDataUrl();
+      // 인증카드가 생성되지 않았으면 자동 생성
+      if (!photoDataUrl || photoDataUrl === "data:,") {
+        if (typeof drawBadge === 'function' && photoSource) {
+          drawBadge();
+          photoDataUrl = getBadgeDataUrl();
+        }
+      }
+    }
+
     // 현재 로그인한 사용자 정보 가져오기
     fetch('/api/session')
       .then(res => res.json())
@@ -817,7 +830,7 @@ const finishSession = () => {
             endTime: endTime.toISOString(),
             durationMinutes: Math.round(elapsedSeconds / 60),
             planText: plan,
-            photoUrl: null,
+            photoUrl: photoDataUrl,
           });
         }
       })
