@@ -1365,6 +1365,7 @@ const saveDonationHistoryEntry = async ({
         sessionId: sessionId,
         note: note,
         transactionId: '', // 나중에 실제 트랜잭션 ID 추가 가능
+        status: 'completed', // 결제 완료된 기부
       });
       console.log('기부 기록이 API에 저장되었습니다.');
     } catch (error) {

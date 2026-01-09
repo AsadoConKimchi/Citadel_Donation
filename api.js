@@ -157,6 +157,7 @@ const DonationAPI = {
       note: donationData.note,
       message: donationData.message,
       transaction_id: donationData.transactionId,
+      status: donationData.status || 'pending',
     };
 
     return apiRequest('/api/donations', {
