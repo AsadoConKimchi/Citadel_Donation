@@ -96,6 +96,8 @@ let hasPromptedDaily = false;
 let walletToastTimeout = null;
 let currentDiscordId = null; // 현재 로그인한 사용자의 Discord ID
 let pendingDailyCache = null; // API 호출 결과 캐시
+let sessionsCache = null; // POW 세션 캐시
+let donationsCache = null; // 기부 기록 캐시
 
 const donationControls = [
   donationScope,
@@ -500,18 +502,107 @@ const getPlanValue = () => {
   return studyPlanInput?.value.trim() || localStorage.getItem(planKey) || "";
 };
 
+// POW 세션 데이터를 API에서 로드 (비동기, 초기화 시 호출)
+const loadSessionsFromAPI = async () => {
+  if (!currentDiscordId || typeof StudySessionAPI === 'undefined') {
+    return;
+  }
+
+  try {
+    const response = await StudySessionAPI.getToday(currentDiscordId);
+    if (response.success && response.data) {
+      // API 응답을 localStorage 형식으로 변환
+      const sessions = response.data.map(apiSession => {
+        const durationSeconds = apiSession.duration_minutes * 60;
+        // goalMinutes는 API에 없으므로 durationMinutes 사용 (임시)
+        const goalMinutes = apiSession.duration_minutes;
+        return {
+          durationSeconds,
+          goalMinutes,
+          plan: apiSession.plan_text || "",
+          achieved: true, // API 데이터는 이미 완료된 세션
+          timestamp: apiSession.created_at,
+          sessionId: apiSession.id,
+        };
+      });
+      sessionsCache = sessions;
+      // localStorage에도 저장 (폴백용)
+      localStorage.setItem(sessionsKey, JSON.stringify(sessions));
+      console.log('API에서 POW 세션 로드 완료:', sessions.length, '개');
+      return sessions;
+    } else {
+      sessionsCache = [];
+      return [];
+    }
+  } catch (error) {
+    console.error('API에서 POW 세션 가져오기 실패:', error);
+    sessionsCache = [];
+    return [];
+  }
+};
+
 const loadSessions = (key = sessionsKey) => {
+  // 캐시가 있으면 반환
+  if (sessionsCache !== null) {
+    return sessionsCache;
+  }
+
+  // 캐시가 없으면 localStorage에서 가져오기
   try {
     const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    const result = Array.isArray(parsed) ? parsed : [];
+    sessionsCache = result;
+    return result;
   } catch (error) {
+    sessionsCache = [];
+    return [];
+  }
+};
+
+// 기부 기록을 API에서 로드 (비동기, 초기화 시 호출)
+const loadDonationsFromAPI = async () => {
+  if (!currentDiscordId || typeof DonationAPI === 'undefined') {
+    return;
+  }
+
+  try {
+    const response = await DonationAPI.getByUser(currentDiscordId);
+    if (response.success && response.user && response.user.donations) {
+      // API 응답을 localStorage 형식으로 변환
+      const donations = response.user.donations.map(apiDonation => {
+        return {
+          date: apiDonation.date || apiDonation.created_at.split('T')[0],
+          sats: apiDonation.amount || 0,
+          minutes: apiDonation.duration_minutes || Math.floor((apiDonation.duration_seconds || 0) / 60),
+          seconds: apiDonation.duration_seconds || 0,
+          mode: apiDonation.donation_mode || 'pow-writing',
+          scope: apiDonation.donation_scope || 'session',
+          sessionId: apiDonation.session_id || '',
+          note: apiDonation.note || apiDonation.message || '',
+          isPaid: apiDonation.status === 'completed',
+          donationId: apiDonation.id,
+        };
+      });
+      donationsCache = donations;
+      // localStorage에도 저장 (폴백용)
+      localStorage.setItem(donationHistoryKey, JSON.stringify(donations));
+      console.log('API에서 기부 기록 로드 완료:', donations.length, '개');
+      return donations;
+    } else {
+      donationsCache = [];
+      return [];
+    }
+  } catch (error) {
+    console.error('API에서 기부 기록 가져오기 실패:', error);
+    donationsCache = [];
     return [];
   }
 };
 
 const saveSessions = (sessions, key = sessionsKey) => {
   localStorage.setItem(key, JSON.stringify(sessions));
+  sessionsCache = sessions;
 };
 
 const getLastSessionSeconds = () => {
@@ -787,8 +878,24 @@ const finishSession = () => {
   openCameraButton?.focus();
 };
 
-const getDonationHistory = () =>
-  JSON.parse(localStorage.getItem(donationHistoryKey) || "[]");
+const getDonationHistory = () => {
+  // 캐시가 있으면 반환
+  if (donationsCache !== null) {
+    return donationsCache;
+  }
+
+  // 캐시가 없으면 localStorage에서 가져오기
+  try {
+    const raw = localStorage.getItem(donationHistoryKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const result = Array.isArray(parsed) ? parsed : [];
+    donationsCache = result;
+    return result;
+  } catch (error) {
+    donationsCache = [];
+    return [];
+  }
+};
 
 const isPaidEntry = (entry) => entry?.isPaid !== false;
 
@@ -1212,7 +1319,7 @@ const initializeTotals = () => {
   renderDonationHistory();
 };
 
-const saveDonationHistoryEntry = ({
+const saveDonationHistoryEntry = async ({
   date,
   sats,
   minutes,
@@ -1224,7 +1331,7 @@ const saveDonationHistoryEntry = ({
   isPaid = true,
 }) => {
   const history = getDonationHistory();
-  history.push({
+  const entry = {
     date,
     sats,
     minutes,
@@ -1234,8 +1341,35 @@ const saveDonationHistoryEntry = ({
     sessionId,
     note,
     isPaid,
-  });
+  };
+  history.push(entry);
+
+  // localStorage에 저장 (폴백용)
   localStorage.setItem(donationHistoryKey, JSON.stringify(history));
+  donationsCache = history;
+
+  // 로그인한 경우 API에도 저장
+  if (currentDiscordId && typeof DonationAPI !== 'undefined' && isPaid) {
+    try {
+      await DonationAPI.create(currentDiscordId, {
+        amount: sats,
+        currency: 'SAT',
+        date: date,
+        durationSeconds: seconds,
+        durationMinutes: minutes,
+        donationMode: mode,
+        donationScope: scope,
+        sessionId: sessionId,
+        note: note,
+        transactionId: '', // 나중에 실제 트랜잭션 ID 추가 가능
+      });
+      console.log('기부 기록이 API에 저장되었습니다.');
+    } catch (error) {
+      console.error('API에 기부 기록 저장 실패:', error);
+      // 실패해도 localStorage에는 저장되어 있음
+    }
+  }
+
   updateDonationTotals();
   renderDonationHistory();
 };
@@ -1837,14 +1971,25 @@ const setAuthState = ({ authenticated, authorized, user, guild, error }) => {
     allowedServer.textContent = `접속 가능 서버: ${guildName}`;
   }
 
-  // 로그인한 사용자의 Discord ID 설정 및 적립액 로드
+  // 로그인한 사용자의 Discord ID 설정 및 모든 데이터 로드
   if (user && user.id) {
     currentDiscordId = user.id;
-    // API에서 적립액 로드
-    loadPendingDailyFromAPI().then(() => {
+
+    // 모든 데이터를 병렬로 API에서 로드
+    Promise.all([
+      loadPendingDailyFromAPI(),
+      loadSessionsFromAPI(),
+      loadDonationsFromAPI(),
+    ]).then(() => {
       // 로드 완료 후 UI 업데이트
       updateAccumulatedSats();
       updateTodayDonationSummary();
+      renderSessions();
+      updateDonationTotals();
+      renderDonationHistory();
+      console.log('모든 데이터를 API에서 로드 완료');
+    }).catch(error => {
+      console.error('데이터 로드 중 오류 발생:', error);
     });
   }
 

@@ -142,17 +142,26 @@ const StudySessionAPI = {
  * 기부 API
  */
 const DonationAPI = {
-  // 기부 생성
-  async create(discordId, amount, currency = 'SAT', message = '', transactionId = '') {
+  // 기부 생성 (확장된 필드 포함)
+  async create(discordId, donationData) {
+    const payload = {
+      discord_id: discordId,
+      amount: donationData.amount,
+      currency: donationData.currency || 'SAT',
+      date: donationData.date || new Date().toISOString().split('T')[0],
+      duration_seconds: donationData.durationSeconds,
+      duration_minutes: donationData.durationMinutes,
+      donation_mode: donationData.donationMode || 'pow-writing',
+      donation_scope: donationData.donationScope || 'session',
+      session_id: donationData.sessionId,
+      note: donationData.note,
+      message: donationData.message,
+      transaction_id: donationData.transactionId,
+    };
+
     return apiRequest('/api/donations', {
       method: 'POST',
-      body: JSON.stringify({
-        discord_id: discordId,
-        amount,
-        currency,
-        message,
-        transaction_id: transactionId,
-      }),
+      body: JSON.stringify(payload),
     });
   },
 
