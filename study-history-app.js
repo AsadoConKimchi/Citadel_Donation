@@ -25,6 +25,7 @@ let currentCategory = "all";
 let currentUser = null;
 let currentSessions = [];
 let currentIndex = 0;
+let currentSessionsByDate = {}; // 날짜별 세션 저장
 
 // 세션 정보 로드
 const loadSession = async () => {
@@ -92,17 +93,17 @@ const renderMyRecords = async () => {
       : sessions.filter(s => s.plan_text && s.plan_text.includes(getCategoryLabel(currentCategory)));
 
     // 날짜별 그룹화
-    const sessionsByDate = {};
+    currentSessionsByDate = {};
     filteredSessions.forEach(session => {
       const date = session.created_at.split('T')[0];
-      if (!sessionsByDate[date]) {
-        sessionsByDate[date] = [];
+      if (!currentSessionsByDate[date]) {
+        currentSessionsByDate[date] = [];
       }
-      sessionsByDate[date].push(session);
+      currentSessionsByDate[date].push(session);
     });
 
     // 날짜 선택 옵션 렌더링
-    const dates = Object.keys(sessionsByDate).sort().reverse();
+    const dates = Object.keys(currentSessionsByDate).sort().reverse();
     studyDateSelect.innerHTML = dates
       .map(date => `<option value="${date}">${date}</option>`)
       .join("");
@@ -110,7 +111,7 @@ const renderMyRecords = async () => {
     if (dates.length > 0) {
       studyDateSelect.value = dates[0];
       studyHistoryEmpty.classList.add("hidden");
-      renderSessionsForDate(dates[0], sessionsByDate);
+      renderSessionsForDate(dates[0], currentSessionsByDate);
     } else {
       studyDateSelect.innerHTML = '<option value="">날짜 없음</option>';
       carouselContainer.classList.add("hidden");
@@ -295,9 +296,10 @@ powCategoryFilter?.addEventListener("change", (e) => {
 
 studyDateSelect?.addEventListener("change", (e) => {
   const date = e.target.value;
-  // 현재 로드된 sessionsByDate 재사용 필요
-  // 간단하게 재렌더링
-  renderMyRecords();
+  // 현재 로드된 currentSessionsByDate 사용
+  if (date && currentSessionsByDate[date]) {
+    renderSessionsForDate(date, currentSessionsByDate);
+  }
 });
 
 // Carousel 버튼 이벤트

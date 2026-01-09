@@ -2241,13 +2241,23 @@ const drawBadge = async (sessionOverride = null) => {
     const y = (badgeCanvas.height - height) / 2;
     context.drawImage(backgroundImage, x, y, width, height);
   } else {
-    // 아무 이미지도 없으면 그라디언트 배경 사용
-    const gradient = context.createLinearGradient(0, 0, 0, badgeCanvas.height);
-    gradient.addColorStop(0, "#1e3a8a");  // 진한 파랑
-    gradient.addColorStop(0.5, "#3b82f6"); // 파랑
-    gradient.addColorStop(1, "#60a5fa");   // 밝은 파랑
+    // 아무 이미지도 없으면 사이버펑크 스타일 그라디언트 배경 사용
+    const gradient = context.createLinearGradient(0, 0, badgeCanvas.width, badgeCanvas.height);
+    gradient.addColorStop(0, "#0f172a");    // 어두운 청회색
+    gradient.addColorStop(0.3, "#1e293b");  // 진한 회색
+    gradient.addColorStop(0.6, "#f97316");  // 오렌지 (비트코인 컬러)
+    gradient.addColorStop(1, "#ea580c");    // 진한 오렌지
     context.fillStyle = gradient;
     context.fillRect(0, 0, badgeCanvas.width, badgeCanvas.height);
+
+    // 비트코인 심볼 ₿ 워터마크 추가
+    context.save();
+    context.globalAlpha = 0.1;
+    context.fillStyle = "#ffffff";
+    context.font = "bold 400px sans-serif";
+    context.textAlign = "center";
+    context.fillText("₿", badgeCanvas.width / 2, badgeCanvas.height / 2 + 100);
+    context.restore();
   }
 
   const lastSession = sessionOverride || getLastSessionSeconds();
@@ -2557,20 +2567,14 @@ const loadDefaultBackgroundImage = () => {
   return defaultBackgroundLoadPromise;
 };
 
-// 기본 배경 이미지 로드 보장
+// 기본 배경 이미지 로드 보장 (비활성화 - 그라디언트 사용)
 const ensureDefaultBackgroundLoaded = async () => {
-  if (defaultBackgroundImage) {
-    return defaultBackgroundImage;
-  }
-  try {
-    return await loadDefaultBackgroundImage();
-  } catch (e) {
-    console.warn("기본 배경 이미지 사용 불가, 그라디언트 사용");
-    return null;
-  }
+  // 기본 이미지 로딩 비활성화, 항상 null 반환하여 그라디언트 사용
+  return null;
 };
 
-loadDefaultBackgroundImage();
+// 기본 배경 이미지 로딩 비활성화 (8.7MB로 너무 큼, 그라디언트 사용)
+// loadDefaultBackgroundImage();
 loadSession();
 promptPendingDailyDonation();
 if (discordRefresh) {
