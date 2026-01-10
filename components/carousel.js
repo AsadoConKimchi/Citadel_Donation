@@ -143,7 +143,7 @@ class Carousel {
       // 인증카드 이미지가 있으면 이미지 표시
       return `
         <div class="carousel-card ${isActive ? 'active' : ''}" data-index="${index}">
-          <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" />
+          <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" loading="lazy" />
         </div>
       `;
     } else {

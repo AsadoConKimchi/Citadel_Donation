@@ -35,23 +35,35 @@ class Leaderboard {
     this.showLoading();
 
     try {
-      let response;
+      let endpoint;
+      let params;
 
       if (this.type === 'time' || this.type === 'donation') {
         // 분야별 랭킹 API 사용
-        response = await fetch(
-          `${window.BACKEND_API_URL || ''}/api/rankings/by-category?type=${this.type}&category=${this.category}&limit=${this.limit}`
-        );
+        endpoint = `${window.BACKEND_API_URL || ''}/api/rankings/by-category`;
+        params = {
+          type: this.type,
+          category: this.category,
+          limit: this.limit,
+        };
       } else if (this.type === 'top-donors') {
         // Top 기부자 API 사용
-        response = await fetch(
-          `${window.BACKEND_API_URL || ''}/api/donations/top?category=${this.category}&limit=${this.limit}`
-        );
+        endpoint = `${window.BACKEND_API_URL || ''}/api/donations/top`;
+        params = {
+          category: this.category,
+          limit: this.limit,
+        };
       } else {
         throw new Error(`지원하지 않는 리더보드 타입: ${this.type}`);
       }
 
-      const result = await response.json();
+      // cachedFetch 사용 (캐싱 적용)
+      const queryString = new URLSearchParams(params).toString();
+      const result = await cachedFetch(
+        `${endpoint}?${queryString}`,
+        {},
+        { useCache: true, params }
+      );
 
       if (!result.success) {
         throw new Error(result.error || '데이터를 불러올 수 없습니다.');
@@ -126,7 +138,7 @@ class Leaderboard {
       <li class="leaderboard-item rank-${rank}">
         <div class="leaderboard-left">
           ${rankBadge}
-          ${avatar ? `<img src="${avatar}" alt="${username}" class="leaderboard-avatar" />` : ''}
+          ${avatar ? `<img src="${avatar}" alt="${username}" class="leaderboard-avatar" loading="lazy" />` : ''}
           <span class="leaderboard-username">${username}</span>
         </div>
         <div class="leaderboard-right">

@@ -263,7 +263,7 @@ const renderRecordCard = (session, index, currentIndex) => {
           <span class="record-date">${date}</span>
           <span class="record-category">${categoryEmoji} ${categoryName}</span>
         </div>
-        <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" />
+        <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" loading="lazy" />
         <div class="record-card-footer">
           <span class="record-time">${minutes}분</span>
         </div>

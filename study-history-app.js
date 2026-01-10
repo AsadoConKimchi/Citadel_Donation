@@ -128,12 +128,16 @@ const updateDashboardTitle = () => {
 
 const loadPopularRecords = async () => {
   try {
-    // API에서 인기 게시물 가져오기
-    const response = await fetch(
-      `${window.BACKEND_API_URL || ''}/api/discord-posts/popular?category=${currentCategory}&limit=5`
-    );
+    // API에서 인기 게시물 가져오기 (캐싱 적용)
+    const endpoint = `${window.BACKEND_API_URL || ''}/api/discord-posts/popular`;
+    const params = { category: currentCategory, limit: 5 };
+    const queryString = new URLSearchParams(params).toString();
 
-    const result = await response.json();
+    const result = await cachedFetch(
+      `${endpoint}?${queryString}`,
+      {},
+      { useCache: true, params }
+    );
 
     if (!result.success) {
       throw new Error(result.error || '데이터를 불러올 수 없습니다.');
@@ -189,7 +193,7 @@ const renderPopularCard = (post, index, currentIndex) => {
           <span class="popular-rank">${rankBadge}</span>
           <span class="popular-reactions">❤️ ${formatNumber(reactionCount)}</span>
         </div>
-        <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" />
+        <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" loading="lazy" />
         <div class="popular-card-footer">
           <span class="popular-username">${username}</span>
           <span class="popular-time">${minutes}분</span>
