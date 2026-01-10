@@ -1145,6 +1145,20 @@ body.timer-modal-open {
   border: 2px solid #cbd5e1;
 }
 
+.leaderboard-avatar-fallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: white;
+  flex-shrink: 0;
+  border: 2px solid #cbd5e1;
+}
+
 .leaderboard-username {
   font-weight: 600;
   font-size: 15px;
@@ -1353,6 +1367,12 @@ body.timer-modal-open {
   .leaderboard-avatar {
     width: 32px;
     height: 32px;
+  }
+
+  .leaderboard-avatar-fallback {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 
   .leaderboard-username {

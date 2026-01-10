@@ -104,9 +104,12 @@ class Leaderboard {
   defaultRenderItem(item, index) {
     const rank = item.rank || (index + 1);
     const username = item.discord_username || '알 수 없음';
-    const avatar = item.discord_avatar
-      ? `https://cdn.discordapp.com/avatars/${item.discord_id}/${item.discord_avatar}.png`
-      : '';
+
+    // 아바타 URL 생성 (discord_id와 discord_avatar가 모두 있어야 함)
+    let avatar = '';
+    if (item.discord_id && item.discord_avatar) {
+      avatar = `https://cdn.discordapp.com/avatars/${item.discord_id}/${item.discord_avatar}.png`;
+    }
 
     let valueText = '';
 
@@ -134,11 +137,24 @@ class Leaderboard {
       rankBadge = '<span class="rank bronze">🥉</span>';
     }
 
+    // 아바타 또는 폴백 (username initial)
+    let avatarHtml = '';
+    if (avatar) {
+      avatarHtml = `<img src="${avatar}" alt="${username}" class="leaderboard-avatar" loading="lazy" />`;
+    } else {
+      // 폴백: username의 첫 글자를 색상 원으로 표시
+      const initial = username.charAt(0).toUpperCase();
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+      const colorIndex = username.charCodeAt(0) % colors.length;
+      const bgColor = colors[colorIndex];
+      avatarHtml = `<div class="leaderboard-avatar-fallback" style="background-color: ${bgColor}">${initial}</div>`;
+    }
+
     return `
       <li class="leaderboard-item rank-${rank}">
         <div class="leaderboard-left">
           ${rankBadge}
-          ${avatar ? `<img src="${avatar}" alt="${username}" class="leaderboard-avatar" loading="lazy" />` : ''}
+          ${avatarHtml}
           <span class="leaderboard-username">${username}</span>
         </div>
         <div class="leaderboard-right">
