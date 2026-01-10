@@ -1060,6 +1060,7 @@ body.timer-modal-open {
   .carousel-card {
     padding: 8px;
     max-height: 280px;
+    box-sizing: border-box;
   }
 
   .pow-badge-image {
@@ -1501,6 +1502,7 @@ body.timer-modal-open {
 /* Carousel 카드 위치 조정 (인기 기록용) */
 .carousel-card {
   position: relative;
+  box-sizing: border-box;
 }
 
 .carousel-card .pow-badge-image {

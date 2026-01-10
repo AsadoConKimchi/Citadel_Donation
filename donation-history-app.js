@@ -372,6 +372,32 @@ donationPagePay?.addEventListener("click", async () => {
             // 적립액 삭제
             await AccumulatedSatsAPI.delete(currentUser.id, todayKey);
 
+            // Discord 공유 (적립액 기부)
+            try {
+              // 총 기부액 조회
+              const statusResponse = await DonationAPI.getStatus(currentUser.id);
+              const totalDonated = statusResponse.success ? (statusResponse.data.total_donated || 0) : 0;
+
+              await fetch('/api/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  dataUrl: null, // 적립액 기부는 이미지 없음
+                  sats: accumulated,
+                  donationMode: accResponse.data.donation_mode || 'pow-writing',
+                  donationScope: 'total',
+                  donationNote: '일일 적립액 기부',
+                  totalDonatedSats: totalDonated,
+                  accumulatedSats: 0,
+                  totalAccumulatedSats: 0,
+                  shareContext: 'payment',
+                }),
+              });
+            } catch (shareError) {
+              console.error('Discord 공유 실패:', shareError);
+              // Discord 공유 실패해도 기부는 완료됨
+            }
+
             alert("기부가 완료되었습니다!");
 
             // 데이터 새로고침
