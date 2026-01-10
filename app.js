@@ -2466,8 +2466,8 @@ const shareToDiscordOnly = async () => {
   };
 
   try {
-    // Discord Bot에 직접 전송 요청
-    const response = await fetch("http://localhost:3001/send-pow-card", {
+    // 백엔드 API를 통해 Discord에 전송
+    const response = await fetch("/api/discord-posts/share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(botPayload),
