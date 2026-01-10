@@ -2455,6 +2455,12 @@ const shareToDiscordOnly = async () => {
     return;
   }
 
+  // 기부 정보 수집
+  const donationScopeValue = getDonationScopeValue();
+  const donationSats = getDonationSatsForScope();
+  const totalDonatedSats = getTotalDonatedSats();
+  const totalAccumulatedSats = donationScopeValue === "total" ? donationSats : 0;
+
   // Bot이 기대하는 형식으로 데이터 준비
   const botPayload = {
     discord_id: sessionData.user.id,
@@ -2463,6 +2469,11 @@ const shareToDiscordOnly = async () => {
     plan_text: lastSession.plan || "목표 미입력",
     donation_mode: donationMode?.value || "pow-writing",
     duration_seconds: lastSession.durationSeconds || 0,
+    // 기부 정보 추가
+    donation_scope: donationScopeValue,
+    donation_sats: donationSats,
+    total_donated_sats: totalDonatedSats,
+    total_accumulated_sats: totalAccumulatedSats,
   };
 
   try {
