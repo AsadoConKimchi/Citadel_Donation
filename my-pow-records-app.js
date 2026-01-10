@@ -97,6 +97,9 @@ const loadSessions = async () => {
   }
 
   try {
+    console.log("현재 사용자 정보:", currentUser);
+    console.log("API 호출 파라미터 - discord_id:", currentUser.id);
+
     // API에서 사용자의 모든 세션 가져오기
     const response = await StudySessionAPI.getByUser(currentUser.id, 500);
 
@@ -106,6 +109,12 @@ const loadSessions = async () => {
 
     allSessions = response.data || [];
     console.log(`${allSessions.length}개의 POW 세션 로드됨`);
+
+    // 첫 번째 세션의 photo_url 확인
+    if (allSessions.length > 0) {
+      console.log("첫 번째 세션 데이터:", allSessions[0]);
+      console.log("photo_url:", allSessions[0].photo_url);
+    }
 
     // 필터 적용
     applyFilters();
