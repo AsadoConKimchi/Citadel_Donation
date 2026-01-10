@@ -2474,6 +2474,7 @@ const shareToDiscordOnly = async () => {
     donation_sats: donationSats,
     total_donated_sats: totalDonatedSats,
     total_accumulated_sats: totalAccumulatedSats,
+    donation_note: donationNote?.value?.trim() || "",
   };
 
   try {
