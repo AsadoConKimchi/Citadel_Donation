@@ -1706,7 +1706,6 @@ const openAccumulatedDonationPayment = async () => {
   });
 
   // 달성률 계산
-  const totalMinutes = Math.floor(donationSeconds / 60);
   const achievementRate = lastSession.goalMinutes > 0
     ? Math.round((totalMinutes / lastSession.goalMinutes) * 100)
     : 0;
