@@ -285,8 +285,8 @@ function renderRecordCard(session, index, currentIndex) {
       : session.discord_posts;
 
     if (discordPost && discordPost.message_id && discordPost.channel_id) {
-      // Discord 서버 ID (TODO: 환경변수로 관리)
-      const DISCORD_GUILD_ID = '1452301614894420044'; // 임시값, 실제 서버 ID로 교체 필요
+      // Discord 서버 ID
+      const DISCORD_GUILD_ID = '1452301614307348492';
       discordMessageUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${discordPost.channel_id}/${discordPost.message_id}`;
     }
   }
