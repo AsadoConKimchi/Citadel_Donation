@@ -64,7 +64,8 @@ function renderPopularCard(post, index, currentIndex) {
   const photoUrl = post.photo_url;
   const reactionCount = post.reaction_count || 0;
   const username = post.discord_username || "알 수 없음";
-  const minutes = post.duration_minutes || 0;
+  const seconds = post.duration_seconds || 0;
+  const timeText = seconds > 0 ? formatDuration(seconds, false) : "0분";
   const plan = post.plan_text || "계획 없음";
   const rank = index + 1;
 
@@ -85,7 +86,7 @@ function renderPopularCard(post, index, currentIndex) {
         <img src="${photoUrl}" alt="POW 인증카드" class="pow-badge-image" loading="lazy" />
         <div class="popular-card-footer">
           <span class="popular-username">${username}</span>
-          <span class="popular-time">${minutes}분</span>
+          <span class="popular-time">${timeText}</span>
         </div>
       </div>
     `;
@@ -98,7 +99,7 @@ function renderPopularCard(post, index, currentIndex) {
             <span class="popular-rank">${rankBadge}</span>
             <span class="popular-reactions">❤️ ${formatNumber(reactionCount)}</span>
           </div>
-          <div class="pow-text-time">${minutes}분</div>
+          <div class="pow-text-time">${timeText}</div>
           <div class="pow-text-plan">${plan}</div>
           <div class="popular-card-footer">
             <span class="popular-username">${username}</span>
