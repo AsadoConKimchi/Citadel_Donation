@@ -1585,17 +1585,13 @@ const openLightningWalletWithPayload = async (payload, { onSuccess } = {}) => {
     }
 
     const normalizedInvoice = normalizeInvoice(invoiceResult.data.invoice);
-    const paymentHash = invoiceResult.data.paymentHash;
 
     if (!normalizedInvoice) {
       throw new Error("인보이스 형식이 올바르지 않습니다.");
     }
-    if (!paymentHash) {
-      throw new Error("Payment hash가 누락되었습니다.");
-    }
 
-    // paymentHash 저장
-    currentPaymentHash = paymentHash;
+    // invoice 저장 (결제 확인용)
+    currentInvoice = normalizedInvoice;
 
     if (shareStatus) {
       shareStatus.textContent =
@@ -1870,7 +1866,7 @@ const renderWalletInvoice = (invoice) => {
 
 // 결제 완료 후 실행할 콜백 저장
 let pendingOnSuccessCallback = null;
-let currentPaymentHash = null;
+let currentInvoice = null;
 let currentDonationScope = null; // 'session', 'total', 'accumulated'
 let currentDonationSats = 0;
 let currentDonationPayload = null;
@@ -1910,10 +1906,10 @@ const closeWalletSelection = async () => {
   // 결제 상태 확인
   if (pendingOnSuccessCallback && typeof pendingOnSuccessCallback === "function") {
     // Blink API로 결제 상태 확인
-    if (!currentPaymentHash) {
-      alert("Payment hash가 없습니다. 결제 상태를 확인할 수 없습니다.");
+    if (!currentInvoice) {
+      alert("Invoice가 없습니다. 결제 상태를 확인할 수 없습니다.");
       pendingOnSuccessCallback = null;
-      currentPaymentHash = null;
+      currentInvoice = null;
       currentDonationScope = null;
       currentDonationSats = 0;
       currentDonationPayload = null;
@@ -1936,7 +1932,7 @@ const closeWalletSelection = async () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            paymentHash: currentPaymentHash,
+            paymentRequest: currentInvoice,
           }),
         });
 
@@ -2030,7 +2026,7 @@ const closeWalletSelection = async () => {
 
     // 콜백 및 상태 초기화
     pendingOnSuccessCallback = null;
-    currentPaymentHash = null;
+    currentInvoice = null;
     currentDonationScope = null;
     currentDonationSats = 0;
     currentDonationPayload = null;
