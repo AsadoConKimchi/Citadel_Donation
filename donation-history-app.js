@@ -320,31 +320,77 @@ donationPagePay?.addEventListener("click", async () => {
 
     if (!confirmed) return;
 
-    // 기부 생성
-    await DonationAPI.create(currentUser.id, {
-      amount: accumulated,
-      currency: 'SAT',
-      donation_mode: accResponse.data.donation_mode || 'pow-writing',
-      donation_scope: 'total',
-      note: '일일 적립액 기부',
-      plan_text: accResponse.data.plan_text,
-      accumulated_sats: accumulated,
-      total_accumulated_sats: accumulated,
-      status: 'completed',
-      date: todayKey,
+    // Lightning 인보이스 생성
+    const invoiceResponse = await fetch(`${window.BACKEND_API_URL}/api/blink/create-invoice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: accumulated,
+        memo: `Citadel POW - 일일 적립액 기부`,
+      }),
     });
 
-    // 적립액 삭제
-    await AccumulatedSatsAPI.delete(currentUser.id, todayKey);
+    if (!invoiceResponse.ok) {
+      let errorMessage = "";
+      try {
+        const parsed = await invoiceResponse.clone().json();
+        errorMessage = parsed?.error || "";
+      } catch (error) {
+        errorMessage = await invoiceResponse.text();
+      }
+      throw new Error(errorMessage || "인보이스 생성에 실패했습니다.");
+    }
 
-    alert("기부가 완료되었습니다!");
+    const invoiceResult = await invoiceResponse.json();
+    if (!invoiceResult?.success || !invoiceResult?.data?.invoice) {
+      throw new Error("인보이스 응답이 비어 있습니다.");
+    }
 
-    // 데이터 새로고침
-    await loadMyDonationStatus();
-    await loadMyDonations();
+    const invoice = invoiceResult.data.invoice;
+
+    // 지갑 선택 창 열기
+    if (typeof window.openWalletSelection === 'function') {
+      window.openWalletSelection({
+        invoice: invoice,
+        message: `${formatNumber(accumulated)} sats 기부를 위한 Lightning 결제`,
+        onSuccess: async () => {
+          try {
+            // 결제 완료 후 기부 생성
+            await DonationAPI.create(currentUser.id, {
+              amount: accumulated,
+              currency: 'SAT',
+              donation_mode: accResponse.data.donation_mode || 'pow-writing',
+              donation_scope: 'total',
+              note: '일일 적립액 기부',
+              plan_text: accResponse.data.plan_text,
+              accumulated_sats: accumulated,
+              total_accumulated_sats: accumulated,
+              status: 'completed',
+              date: todayKey,
+            });
+
+            // 적립액 삭제
+            await AccumulatedSatsAPI.delete(currentUser.id, todayKey);
+
+            alert("기부가 완료되었습니다!");
+
+            // 데이터 새로고침
+            await loadMyDonationStatus();
+            await loadMyDonations();
+          } catch (error) {
+            console.error("기부 저장 실패:", error);
+            alert("결제는 완료되었지만 기록 저장에 실패했습니다. 관리자에게 문의하세요.");
+          }
+        },
+      });
+    } else {
+      // 지갑 선택 기능이 없는 경우 Lightning URL 직접 열기
+      window.open(`lightning:${invoice}`, '_blank');
+      alert("지갑 앱에서 결제를 완료한 후 이 페이지로 돌아와서 '결제 완료' 버튼을 눌러주세요.");
+    }
   } catch (error) {
     console.error("기부 실패:", error);
-    alert("기부에 실패했습니다. 다시 시도해주세요.");
+    alert(error.message || "기부에 실패했습니다. 다시 시도해주세요.");
   }
 });
 
