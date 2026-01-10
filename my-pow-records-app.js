@@ -246,7 +246,7 @@ const updateStats = () => {
  * @param {number} currentIndex - 현재 활성화된 인덱스
  * @returns {string} HTML 문자열
  */
-const renderRecordCard = (session, index, currentIndex) => {
+function renderRecordCard(session, index, currentIndex) {
   const isActive = index === currentIndex;
   const photoUrl = session.photo_url;
   const minutes = session.duration_minutes || 0;
@@ -284,7 +284,7 @@ const renderRecordCard = (session, index, currentIndex) => {
       </div>
     `;
   }
-};
+}
 
 // ============================================
 // 초기화
