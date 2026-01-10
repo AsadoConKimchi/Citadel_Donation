@@ -1585,18 +1585,27 @@ const openLightningWalletWithPayload = async (payload, { onSuccess } = {}) => {
     }
 
     const normalizedInvoice = normalizeInvoice(invoiceResult.data.invoice);
+    const paymentHash = invoiceResult.data.paymentHash;
+
     if (!normalizedInvoice) {
       throw new Error("인보이스 형식이 올바르지 않습니다.");
     }
+    if (!paymentHash) {
+      throw new Error("Payment hash가 누락되었습니다.");
+    }
+
+    // paymentHash 저장
+    currentPaymentHash = paymentHash;
+
     if (shareStatus) {
       shareStatus.textContent =
         "지갑 앱을 열었습니다. 결제가 완료되면 직접 '결제 완료' 버튼을 눌러주세요.";
     }
-    // onSuccess는 제거 - 수동 결제 확인 방식 사용
+    // onSuccess 콜백을 walletSelection으로 전달
     openWalletSelection({
       invoice: normalizedInvoice,
       message: "원하는 지갑을 선택하면 결제가 이어집니다.",
-      onSuccess, // onSuccess 콜백을 walletSelection으로 전달
+      onSuccess,
     });
   } catch (error) {
     if (shareStatus) {
@@ -1851,6 +1860,7 @@ const renderWalletInvoice = (invoice) => {
 
 // 결제 완료 후 실행할 콜백 저장
 let pendingOnSuccessCallback = null;
+let currentPaymentHash = null;
 
 const openWalletSelection = ({ invoice, message, onSuccess } = {}) => {
   // onSuccess 콜백 저장
@@ -1879,7 +1889,7 @@ const openWalletSelection = ({ invoice, message, onSuccess } = {}) => {
   }
 };
 
-const closeWalletSelection = () => {
+const closeWalletSelection = async () => {
   if (!walletModal) {
     return;
   }
@@ -1888,15 +1898,67 @@ const closeWalletSelection = () => {
   if (pendingOnSuccessCallback && typeof pendingOnSuccessCallback === "function") {
     const confirmed = window.confirm("결제를 완료하셨습니까?\n\n완료하지 않았다면 '취소'를 눌러주세요.");
     if (confirmed) {
+      // Blink API로 결제 상태 확인
+      if (!currentPaymentHash) {
+        alert("Payment hash가 없습니다. 결제 상태를 확인할 수 없습니다.");
+        pendingOnSuccessCallback = null;
+        currentPaymentHash = null;
+        return;
+      }
+
       try {
-        pendingOnSuccessCallback();
+        // 결제 확인 중 표시
+        if (walletStatus) {
+          walletStatus.textContent = "결제 상태를 확인하는 중입니다...";
+        }
+
+        const checkResponse = await fetch(`${window.BACKEND_API_URL}/api/blink/check-invoice`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentHash: currentPaymentHash,
+          }),
+        });
+
+        if (!checkResponse.ok) {
+          throw new Error("결제 상태 확인에 실패했습니다.");
+        }
+
+        const checkResult = await checkResponse.json();
+        if (!checkResult?.success) {
+          throw new Error("결제 상태 확인 응답이 올바르지 않습니다.");
+        }
+
+        const isPaid = checkResult.data?.paid;
+
+        if (isPaid) {
+          // 결제 확인됨 - onSuccess 콜백 실행
+          try {
+            await pendingOnSuccessCallback();
+          } catch (error) {
+            console.error("결제 완료 콜백 실행 중 오류:", error);
+            alert("기부 기록 저장 중 오류가 발생했습니다: " + error.message);
+          }
+        } else {
+          // 결제 안됨
+          alert("아직 결제가 확인되지 않았습니다.\n\n지갑에서 결제를 완료한 후 다시 시도해주세요.");
+          // 모달을 닫지 않고 return
+          return;
+        }
       } catch (error) {
-        console.error("결제 완료 콜백 실행 중 오류:", error);
+        console.error("결제 확인 중 오류:", error);
+        alert("결제 확인 중 오류가 발생했습니다: " + error.message);
+        // 모달을 닫지 않고 return
+        return;
       }
     }
+
+    // 콜백 및 paymentHash 초기화
     pendingOnSuccessCallback = null;
+    currentPaymentHash = null;
   }
 
+  // 모달 닫기
   walletModal.classList.add("hidden");
   walletModal.setAttribute("aria-hidden", "true");
   walletModal.dataset.invoice = "";
