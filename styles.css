@@ -949,7 +949,7 @@ body.timer-modal-open {
   overflow: hidden;
   border-radius: 12px;
   background: #f8fafc;
-  max-height: 500px;
+  max-height: 650px;
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -968,7 +968,7 @@ body.timer-modal-open {
   justify-content: center;
   align-items: center;
   padding: 16px;
-  max-height: 500px;
+  max-height: 650px;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
@@ -982,7 +982,7 @@ body.timer-modal-open {
 .pow-image-card {
   position: relative;
   width: 100%;
-  max-width: calc(100% - 32px);
+  max-width: 90%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -990,8 +990,8 @@ body.timer-modal-open {
 }
 
 .pow-badge-image {
-  max-width: 100%;
-  max-height: 450px;
+  max-width: 80%;
+  max-height: 600px;
   width: auto;
   height: auto;
   object-fit: contain;
