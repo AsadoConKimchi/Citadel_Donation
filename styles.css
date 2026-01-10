@@ -933,6 +933,13 @@ body.timer-modal-open {
   box-sizing: border-box;
 }
 
+#records-carousel-container {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
 .pow-carousel {
   position: relative;
   display: flex;
@@ -951,7 +958,6 @@ body.timer-modal-open {
   background: #f8fafc;
   height: 550px;
   min-width: 0;
-  width: 100%;
   max-width: 100%;
 }
 
@@ -962,13 +968,13 @@ body.timer-modal-open {
 
 .carousel-card {
   min-width: 100%;
-  width: 100%;
+  max-width: 100%;
   height: 550px;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px;
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
@@ -980,8 +986,8 @@ body.timer-modal-open {
 }
 
 .pow-badge-image {
-  max-width: 90%;
-  max-height: 480px;
+  max-width: 85%;
+  max-height: 500px;
   width: auto;
   height: auto;
   object-fit: contain;
