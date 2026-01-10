@@ -37,18 +37,50 @@
             <p class="hint">현재 적립액을 기부할 수 있습니다.</p>
           </div>
         </div>
+
         <div class="card">
           <h2>누적 기부액 TOP 5</h2>
           <div class="stack">
+            <!-- 분야 선택 -->
+            <label>
+              분야 선택
+              <select id="donation-category-filter">
+                <option value="all">전체</option>
+                <option value="pow-writing">✒️ 글쓰기</option>
+                <option value="pow-music">🎵 음악</option>
+                <option value="pow-study">📝 공부</option>
+                <option value="pow-art">🎨 그림</option>
+                <option value="pow-reading">📚 독서</option>
+                <option value="pow-service">✝️ 봉사</option>
+              </select>
+            </label>
+
             <div class="leaderboard">
-              <p class="leaderboard-title">누적 기부액 TOP 5</p>
-              <ol id="donation-leaderboard" class="leaderboard-list"></ol>
+              <p class="leaderboard-title" id="donation-leaderboard-title">전체 누적 기부액 TOP 5</p>
+              <ol id="donation-leaderboard" class="leaderboard-list">
+                <li class="hint">로딩 중...</li>
+              </ol>
             </div>
           </div>
         </div>
+
         <div class="card">
-          <h2>기부 기록</h2>
+          <h2>나의 기부 기록</h2>
           <div class="stack">
+            <!-- 필터 -->
+            <div class="filter-row">
+              <label class="filter-label">분야</label>
+              <select id="donation-record-category-filter" class="filter-select">
+                <option value="all">전체</option>
+                <option value="pow-writing">✒️ 글쓰기</option>
+                <option value="pow-music">🎵 음악</option>
+                <option value="pow-study">📝 공부</option>
+                <option value="pow-art">🎨 그림</option>
+                <option value="pow-reading">📚 독서</option>
+                <option value="pow-service">✝️ 봉사</option>
+              </select>
+            </div>
+
             <label>
               월 선택
               <select id="donation-month-select" class="scroll-select" size="6"></select>
@@ -57,7 +89,7 @@
               선택한 월: <strong id="donation-history-month">-</strong>
             </p>
             <div id="donation-history-list" class="history-list"></div>
-            <p id="donation-history-empty-page" class="hint">선택한 월의 기부 기록이 없습니다.</p>
+            <p id="donation-history-empty-page" class="hint">선택한 조건의 기부 기록이 없습니다.</p>
             <div id="donation-history-pagination" class="pagination"></div>
           </div>
         </div>
@@ -71,6 +103,11 @@
     <!-- 토글 상태를 위한 hidden input -->
     <input type="hidden" id="donation-scope" value="session" />
 
-    <script src="app.js"></script>
+    <!-- 공통 스크립트 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <script src="api.js"></script>
+    <script src="components/leaderboard.js"></script>
+    <script src="donation-history-app.js"></script>
   </body>
 </html>

@@ -1635,3 +1635,91 @@ body.timer-modal-open {
   }
 }
 
+
+/* ============================================
+   Phase 5: 기부 기록 리스트 스타일
+   ============================================ */
+
+/* 기부 내역 리스트 */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.history-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.history-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.history-item-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.history-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.history-category {
+  font-size: 14px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.history-amount {
+  font-size: 18px;
+  font-weight: 800;
+  color: #10b981;
+}
+
+.history-note {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* 반응형: 모바일 */
+@media (max-width: 640px) {
+  .history-item {
+    padding: 12px;
+  }
+
+  .history-item-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .history-date,
+  .history-category {
+    font-size: 13px;
+  }
+
+  .history-amount {
+    font-size: 16px;
+  }
+}
+
