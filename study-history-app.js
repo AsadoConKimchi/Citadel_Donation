@@ -92,7 +92,7 @@ const loadSession = async () => {
 // 대시보드 로드
 // ============================================
 
-const loadDashboard = async () => {
+async function loadDashboard() {
   try {
     // 리더보드 타이틀 업데이트
     updateDashboardTitle();
@@ -106,7 +106,7 @@ const loadDashboard = async () => {
     console.error("대시보드 로드 실패:", error);
     showError(dashboardLeaderboard, "데이터를 불러올 수 없습니다.");
   }
-};
+}
 
 /**
  * 대시보드 타이틀 업데이트
@@ -126,7 +126,7 @@ const updateDashboardTitle = () => {
 // 인기 기록 로드
 // ============================================
 
-const loadPopularRecords = async () => {
+async function loadPopularRecords() {
   try {
     // API에서 인기 게시물 가져오기 (캐싱 적용)
     const endpoint = `${window.BACKEND_API_URL || ''}/api/discord-posts/popular`;
@@ -161,7 +161,7 @@ const loadPopularRecords = async () => {
     toggleElement(popularRecordsEmpty, true);
     popularRecordsEmpty.textContent = "데이터를 불러올 수 없습니다.";
   }
-};
+}
 
 /**
  * 인기 기록 카드 렌더링 함수
