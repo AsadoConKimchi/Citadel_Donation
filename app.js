@@ -1769,7 +1769,7 @@ const openAccumulatedDonationPayment = async () => {
       try {
         await shareToDiscordAPI({
           sessionId: lastSession.sessionId,
-          dataUrl: dataUrl,
+          dataUrl: "", // 적립액 기부는 이미지 없음
           planText: lastSession.plan,
           durationSeconds: donationSeconds,
           donationScope: "accumulated", // 적립액 기부
