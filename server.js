@@ -348,13 +348,45 @@ const sendDiscordShare = async ({
     }
   }
 
-  const response = await fetch(DISCORD_WEBHOOK_URL, {
+  // Discord webhook에 wait=true 추가하여 메시지 정보 받기
+  const webhookUrl = DISCORD_WEBHOOK_URL.includes('?')
+    ? `${DISCORD_WEBHOOK_URL}&wait=true`
+    : `${DISCORD_WEBHOOK_URL}?wait=true`;
+
+  const response = await fetch(webhookUrl, {
     method: "POST",
     body: form,
   });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || "Discord webhook failed");
+  }
+
+  // Discord 메시지 정보 받기
+  const discordMessage = await response.json();
+  const messageId = discordMessage?.id;
+  const channelId = discordMessage?.channel_id;
+
+  // 백엔드 API에 discord_posts 저장 (적립만 제외, 기부 완료 시에만 저장)
+  if (messageId && channelId && discordUserId && !isAccumulatedShare) {
+    try {
+      await fetch('https://citadel-pow-backend.magadenuevo2025.workers.dev/api/discord-posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: messageId,
+          channel_id: channelId,
+          discord_id: discordUserId,
+          photo_url: dataUrl,
+          plan_text: plan,
+          donation_mode: donationMode,
+          reaction_count: 0,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to save discord post:', error);
+      // Discord 공유는 성공했으므로 에러를 throw하지 않음
+    }
   }
 };
 
