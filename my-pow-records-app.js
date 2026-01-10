@@ -15,11 +15,8 @@ const categoryFilter = document.getElementById("category-filter");
 const dateFilter = document.getElementById("date-filter");
 const periodButtons = document.querySelectorAll("[data-period]");
 
-const recordsCarouselContainer = document.getElementById("records-carousel-container");
-const recordsCarouselTrack = document.getElementById("records-carousel-track");
-const recordsCarouselPrev = document.getElementById("records-carousel-prev");
-const recordsCarouselNext = document.getElementById("records-carousel-next");
-const recordsCarouselIndicator = document.getElementById("records-carousel-indicator");
+const recordsListContainer = document.getElementById("records-list-container");
+const recordsList = document.getElementById("records-list");
 const recordsEmpty = document.getElementById("records-empty");
 
 // ============================================
@@ -50,15 +47,7 @@ const filter = new Filter({
   },
 });
 
-// Carousel 컴포넌트 초기화
-const recordsCarousel = new Carousel({
-  container: recordsCarouselContainer,
-  track: recordsCarouselTrack,
-  prevButton: recordsCarouselPrev,
-  nextButton: recordsCarouselNext,
-  indicator: recordsCarouselIndicator,
-  renderCard: renderRecordCard,
-});
+// Carousel 컴포넌트 제거 (리스트 형식으로 변경)
 
 // ============================================
 // 세션 로드
@@ -77,7 +66,7 @@ const loadSession = async () => {
       toggleElement(filterPanel, false);
       toggleElement(statsSummary, false);
       toggleElement(recordsEmpty, false);
-      recordsCarousel.hide();
+      toggleElement(recordsListContainer, false);
       return false;
     }
   } catch (error) {
@@ -219,9 +208,9 @@ const updateUI = () => {
   // 통계 업데이트
   updateStats();
 
-  // Carousel 업데이트
+  // 리스트 업데이트
   if (filteredSessions.length === 0) {
-    recordsCarousel.hide();
+    toggleElement(recordsListContainer, false);
     toggleElement(recordsEmpty, true);
     recordsEmpty.textContent = "선택한 조건에 맞는 POW 기록이 없습니다.";
   } else {
@@ -230,7 +219,8 @@ const updateUI = () => {
       return new Date(b.created_at) - new Date(a.created_at);
     });
 
-    recordsCarousel.setItems(filteredSessions, 0);
+    renderRecordsList();
+    toggleElement(recordsListContainer, true);
     toggleElement(recordsEmpty, false);
   }
 };
@@ -258,7 +248,67 @@ const updateStats = () => {
 };
 
 // ============================================
-// 카드 렌더링
+// 레코드 리스트 렌더링
+// ============================================
+
+/**
+ * 레코드 리스트 렌더링
+ */
+function renderRecordsList() {
+  recordsList.innerHTML = filteredSessions.map(session => renderRecordItem(session)).join('');
+}
+
+/**
+ * 레코드 아이템 렌더링
+ * @param {Object} session - POW 세션 데이터
+ * @returns {string} HTML 문자열
+ */
+function renderRecordItem(session) {
+  const seconds = session.duration_seconds ?? (session.duration_minutes ? session.duration_minutes * 60 : 0);
+  const timeText = seconds > 0 ? formatDuration(seconds, false) : "0분";
+  const plan = session.plan_text || "계획 없음";
+  const date = formatDate(session.created_at);
+  const categoryEmoji = getCategoryEmoji(session.donation_mode);
+  const categoryName = getCategoryName(session.donation_mode);
+
+  // Discord에 공유했는지 확인
+  let discordMessageUrl = null;
+  if (session.discord_posts) {
+    const discordPost = Array.isArray(session.discord_posts)
+      ? session.discord_posts[0]
+      : session.discord_posts;
+
+    if (discordPost && discordPost.message_id && discordPost.channel_id) {
+      // Discord 서버 ID
+      const DISCORD_GUILD_ID = '1452301614307348492';
+      discordMessageUrl = `https://discord.com/channels/${DISCORD_GUILD_ID}/${discordPost.channel_id}/${discordPost.message_id}`;
+    }
+  }
+
+  // 리스트 아이템 표시
+  return `
+    <div class="pow-record-item">
+      <div class="record-item-header">
+        <span class="record-date">${date}</span>
+        <span class="record-category">${categoryEmoji} ${categoryName}</span>
+      </div>
+      <div class="record-item-body">
+        <div class="record-time">${timeText}</div>
+        <div class="record-plan">${plan}</div>
+      </div>
+      ${discordMessageUrl ? `
+        <div class="record-item-footer">
+          <a href="${discordMessageUrl}" target="_blank" class="discord-link-button">
+            Discord에서 보기 →
+          </a>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ============================================
+// 카드 렌더링 (사용 안 함 - Carousel 제거됨)
 // ============================================
 
 /**

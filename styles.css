@@ -1303,6 +1303,61 @@ body.timer-modal-open {
   transform: translateY(0);
 }
 
+/* POW 기록 리스트 스타일 */
+.pow-records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+}
+
+.pow-record-item {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.pow-record-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.record-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.record-item-body {
+  margin-bottom: 12px;
+}
+
+.record-time {
+  font-size: 24px;
+  font-weight: 800;
+  color: #3b82f6;
+  margin-bottom: 8px;
+}
+
+.record-plan {
+  font-size: 16px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.record-item-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
 .carousel-controls {
   display: flex;
   justify-content: space-between;
