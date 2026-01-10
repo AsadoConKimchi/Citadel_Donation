@@ -2445,31 +2445,38 @@ const shareToDiscordOnly = async () => {
     shareStatus.textContent = "디스코드 공유를 진행 중입니다.";
   }
   const lastSession = getLastSessionSeconds();
-  const accumulatedSats = getSessionAccumulatedSats();
-  const totalAccumulatedSats = getDonationSatsForScope();
-  const payload = buildDonationPayload({
-    dataUrl,
-    plan: lastSession.plan,
-    durationSeconds: lastSession.durationSeconds,
-    goalMinutes: lastSession.goalMinutes,
-    sats: totalAccumulatedSats,
-    donationModeValue: donationMode?.value || "pow-writing",
-    donationScopeValue: getDonationScopeValue(),
-    donationNoteValue: donationNote?.value?.trim() || "",
-    accumulatedSats,
-    totalAccumulatedSats,
-  });
+
+  // 현재 로그인한 사용자 정보 가져오기
+  const sessionResponse = await fetch('/api/session');
+  const sessionData = await sessionResponse.json();
+
+  if (!sessionData.authenticated || !sessionData.user?.id) {
+    alert("로그인이 필요합니다.");
+    return;
+  }
+
+  // Bot이 기대하는 형식으로 데이터 준비
+  const botPayload = {
+    discord_id: sessionData.user.id,
+    session_id: lastSession.sessionId,
+    photo_url: dataUrl,
+    plan_text: lastSession.plan || "목표 미입력",
+    donation_mode: donationMode?.value || "pow-writing",
+    duration_seconds: lastSession.durationSeconds || 0,
+  };
+
   try {
-    const response = await fetch("/api/share", {
+    // Discord Bot에 직접 전송 요청
+    const response = await fetch("http://localhost:3001/send-pow-card", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(botPayload),
     });
     if (!response.ok) {
       let errorMessage = "";
       try {
         const parsed = await response.clone().json();
-        errorMessage = parsed?.message || "";
+        errorMessage = parsed?.error || "";
       } catch (error) {
         errorMessage = await response.text();
       }
