@@ -235,45 +235,6 @@ const RankingAPI = {
 };
 
 /**
- * 적립 사토시 API
- */
-const AccumulatedSatsAPI = {
-  // 특정 날짜의 적립액 조회
-  async get(discordId, date) {
-    return apiRequest(`/api/accumulated-sats/${discordId}/${date}`);
-  },
-
-  // 적립액 생성/업데이트
-  async upsert(discordId, date, data) {
-    return apiRequest('/api/accumulated-sats', {
-      method: 'POST',
-      body: JSON.stringify({
-        discord_id: discordId,
-        date,
-        total_seconds: data.totalSeconds,
-        total_sats: data.totalSats,
-        plan_text: data.planText,
-        goal_minutes: data.goalMinutes,
-        donation_mode: data.donationMode,
-        note: data.note,
-      }),
-    });
-  },
-
-  // 적립액 삭제 (기부 완료 시)
-  async delete(discordId, date) {
-    return apiRequest(`/api/accumulated-sats/${discordId}/${date}`, {
-      method: 'DELETE',
-    });
-  },
-
-  // 사용자의 모든 적립액 조회
-  async getAll(discordId) {
-    return apiRequest(`/api/accumulated-sats/${discordId}`);
-  },
-};
-
-/**
  * localStorage 데이터를 백엔드로 마이그레이션
  */
 async function migrateLocalStorageToBackend(discordId) {
@@ -430,5 +391,52 @@ const MeetupAPI = {
         amount,
       }),
     });
+  },
+};
+
+/**
+ * 적립액 API (하이브리드 시스템)
+ */
+const AccumulatedSatsAPI = {
+  // 현재 적립액 조회
+  async get(discordId) {
+    return apiRequest(`/api/accumulated-sats/user/${discordId}`);
+  },
+
+  // 적립액 추가 (디스코드 공유 성공 시)
+  async add(discordId, amount, sessionId = null, note = null) {
+    return apiRequest('/api/accumulated-sats/add', {
+      method: 'POST',
+      body: JSON.stringify({
+        discord_id: discordId,
+        amount,
+        session_id: sessionId,
+        note,
+      }),
+    });
+  },
+
+  // 적립액 차감 (기부 완료 시)
+  async deduct(discordId, amount, donationId = null, note = null) {
+    return apiRequest('/api/accumulated-sats/deduct', {
+      method: 'POST',
+      body: JSON.stringify({
+        discord_id: discordId,
+        amount,
+        donation_id: donationId,
+        note,
+      }),
+    });
+  },
+
+  // 이력 조회
+  async getLogs(discordId, limit = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
+    return apiRequest(`/api/accumulated-sats/logs/${discordId}?${params}`);
+  },
+
+  // 데이터 무결성 검증 (관리자용)
+  async validate() {
+    return apiRequest('/api/accumulated-sats/validate');
   },
 };

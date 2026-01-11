@@ -98,6 +98,7 @@ let currentDiscordId = null; // 현재 로그인한 사용자의 Discord ID
 let pendingDailyCache = null; // API 호출 결과 캐시
 let sessionsCache = null; // POW 세션 캐시
 let donationsCache = null; // 기부 기록 캐시
+let backendAccumulatedSats = 0; // 백엔드에서 조회한 적립액 (하이브리드 시스템)
 
 const donationControls = [
   donationScope,
@@ -321,28 +322,27 @@ const loadPendingDailyFromAPI = async () => {
   }
 
   try {
-    const response = await AccumulatedSatsAPI.get(currentDiscordId, todayKey);
+    // ⭐️ 하이브리드 시스템: 백엔드에서 총 적립액 조회
+    const response = await AccumulatedSatsAPI.get(currentDiscordId);
     if (response.success && response.data) {
-      // API 응답을 기존 형식으로 변환
-      const result = {};
-      result[todayKey] = {
-        seconds: response.data.total_seconds,
-        sats: response.data.total_sats,
-        plan: response.data.plan_text || "",
-        goalMinutes: response.data.goal_minutes || 0,
-        mode: response.data.donation_mode || "pow-writing",
-        note: response.data.note || "",
-      };
-      pendingDailyCache = result;
-      // localStorage에도 저장 (폴백용)
-      localStorage.setItem(pendingDailyKey, JSON.stringify(result));
-      console.log('API에서 적립액 로드 완료');
+      backendAccumulatedSats = response.data.accumulated_sats || 0;
+      console.log(`✅ 백엔드 적립액 로드 완료: ${backendAccumulatedSats} sats`);
+
+      // localStorage에도 캐시 (폴백용)
+      localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
     } else {
       // 데이터가 없는 경우
-      pendingDailyCache = {};
+      backendAccumulatedSats = 0;
+      console.log('백엔드 적립액 없음, 0으로 초기화');
     }
   } catch (error) {
-    console.error('API에서 적립액 가져오기 실패:', error);
+    console.error('❌ 백엔드에서 적립액 가져오기 실패:', error);
+    // 폴백: localStorage에서 읽기
+    const cached = localStorage.getItem('citadel-backend-accumulated-sats');
+    if (cached) {
+      backendAccumulatedSats = parseInt(cached, 10) || 0;
+      console.log(`폴백: localStorage에서 적립액 로드 (${backendAccumulatedSats} sats)`);
+    }
   }
 };
 
@@ -1116,13 +1116,12 @@ const getDonatedSatsByScope = ({ scope, dateKey } = {}) =>
   }, 0);
 
 const getDonationSatsForScope = () => {
-  // 적립 후 기부 모드: pending daily에 저장된 sats 직접 사용
+  // ⭐️ 적립 후 기부 모드: 백엔드 적립액 사용 (하이브리드 시스템)
   if (getDonationScopeValue() === "total") {
-    const pending = getPendingDaily();
-    const entry = pending[todayKey];
-    return entry ? entry.sats : 0;
+    return backendAccumulatedSats;
   }
 
+  // 즉시 기부 모드: 현재 세션 sats 계산
   const rate = parseSatsRate(satsRateInput?.value);
   return calculateSats({
     rate,
@@ -1783,7 +1782,29 @@ const openAccumulatedDonationPayment = async () => {
         alert("Discord 공유에 실패했습니다: " + error.message);
       }
 
-      // pending daily에서 적립액 차감
+      // ⭐️ 백엔드에서 적립액 차감
+      if (typeof AccumulatedSatsAPI !== 'undefined' && currentUser?.id) {
+        try {
+          const result = await AccumulatedSatsAPI.deduct(
+            currentUser.id,
+            sats,
+            null, // donation_id는 나중에 추가 가능
+            note || '적립액 기부'
+          );
+          console.log('✅ 적립액 차감 성공:', result);
+
+          // 백엔드 적립액 변수 업데이트
+          if (result.success && result.data) {
+            backendAccumulatedSats = result.data.amount_after;
+            localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
+          }
+        } catch (error) {
+          console.error('❌ 적립액 차감 실패:', error);
+          // 차감 실패 시 경고하지만 계속 진행 (localStorage 폴백 사용)
+        }
+      }
+
+      // pending daily에서 적립액 차감 (localStorage 폴백 - 백엔드 동기화용)
       const pending = getPendingDaily();
       delete pending[todayKey];
       savePendingDaily(pending);
@@ -2899,6 +2920,29 @@ const shareToDiscordOnly = async () => {
         isPaid: false,
       });
       donationPage = 1;
+    } else {
+      // ⭐️ 적립 후 기부 모드: 백엔드에 적립액 저장
+      if (typeof AccumulatedSatsAPI !== 'undefined' && sessionData.user?.id) {
+        try {
+          const satsToAccumulate = donationSats;
+          const result = await AccumulatedSatsAPI.add(
+            sessionData.user.id,
+            satsToAccumulate,
+            lastSession.sessionId,
+            donationNote?.value?.trim() || null
+          );
+          console.log('✅ 적립액 저장 성공:', result);
+
+          // 백엔드 적립액 변수 업데이트
+          if (result.success && result.data) {
+            backendAccumulatedSats = result.data.amount_after;
+            localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
+          }
+        } catch (error) {
+          console.error('❌ 적립액 저장 실패:', error);
+          // 실패해도 디스코드 공유는 성공했으므로 계속 진행
+        }
+      }
     }
 
     // 디스코드 공유 성공 후 오늘의 목표 초기화

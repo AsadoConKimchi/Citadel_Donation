@@ -114,18 +114,18 @@ const loadMyDonationStatus = async () => {
       donationPageDonated.textContent = `${formatNumber(totalDonated)} sats`;
     }
 
-    // 현재 적립액 가져오기 (오늘 날짜)
-    const todayKey = getTodayKey();
+    // ⭐️ 하이브리드 시스템: 백엔드에서 총 적립액 가져오기
     try {
-      const accResponse = await AccumulatedSatsAPI.get(currentUser.id, todayKey);
+      const accResponse = await AccumulatedSatsAPI.get(currentUser.id);
       if (accResponse.success && accResponse.data) {
-        const accumulated = accResponse.data.total_sats || 0;
+        const accumulated = accResponse.data.accumulated_sats || 0;
         donationPageAccumulated.textContent = `${formatNumber(accumulated)} sats`;
-        toggleElement(donationPageAccumulatedRow, true);
+        toggleElement(donationPageAccumulatedRow, accumulated > 0);
       } else {
         toggleElement(donationPageAccumulatedRow, false);
       }
     } catch (error) {
+      console.error('적립액 로드 실패:', error);
       toggleElement(donationPageAccumulatedRow, false);
     }
   } catch (error) {
@@ -301,15 +301,15 @@ donationPagePay?.addEventListener("click", async () => {
   const todayKey = getTodayKey();
 
   try {
-    // 오늘의 적립액 가져오기
-    const accResponse = await AccumulatedSatsAPI.get(currentUser.id, todayKey);
+    // ⭐️ 하이브리드 시스템: 백엔드에서 총 적립액 가져오기
+    const accResponse = await AccumulatedSatsAPI.get(currentUser.id);
 
     if (!accResponse.success || !accResponse.data) {
       alert("적립액이 없습니다.");
       return;
     }
 
-    const accumulated = accResponse.data.total_sats || 0;
+    const accumulated = accResponse.data.accumulated_sats || 0;
 
     if (accumulated <= 0) {
       alert("적립액이 없습니다.");
@@ -359,18 +359,18 @@ donationPagePay?.addEventListener("click", async () => {
             await DonationAPI.create(currentUser.id, {
               amount: accumulated,
               currency: 'SAT',
-              donation_mode: accResponse.data.donation_mode || 'pow-writing',
+              donation_mode: 'pow-writing',
               donation_scope: 'total',
-              note: '일일 적립액 기부',
-              plan_text: accResponse.data.plan_text,
+              note: '적립액 기부',
+              plan_text: null,
               accumulated_sats: accumulated,
               total_accumulated_sats: accumulated,
               status: 'completed',
               date: todayKey,
             });
 
-            // 적립액 삭제
-            await AccumulatedSatsAPI.delete(currentUser.id, todayKey);
+            // ⭐️ 하이브리드 시스템: 적립액 차감
+            await AccumulatedSatsAPI.deduct(currentUser.id, accumulated, null, '적립액 기부');
 
             // Discord 공유 (적립액 기부)
             try {
