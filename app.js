@@ -2917,7 +2917,7 @@ const shareToDiscordOnly = async () => {
           const result = await AccumulatedSatsAPI.add(
             sessionData.user.id,
             satsToAccumulate,
-            lastSession.sessionId,
+            lastSession.sessionId || null,  // 빈 문자열 → null 변환
             donationNote?.value?.trim() || null
           );
           console.log('✅ 적립액 저장 성공:', result);
