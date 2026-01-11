@@ -346,42 +346,12 @@ const loadPendingDailyFromAPI = async () => {
   }
 };
 
-// 적립액 데이터 저장 (API 또는 localStorage)
-const savePendingDaily = async (pending) => {
-  // localStorage에 항상 저장 (폴백용)
-  localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
-
-  // 로그인한 경우 API에도 저장
-  if (currentDiscordId && typeof AccumulatedSatsAPI !== 'undefined') {
-    const entry = pending[todayKey];
-    if (entry) {
-      try {
-        await AccumulatedSatsAPI.upsert(currentDiscordId, todayKey, {
-          totalSeconds: entry.seconds || 0,
-          totalSats: entry.sats || 0,
-          planText: entry.plan || null,
-          goalMinutes: entry.goalMinutes || null,
-          donationMode: entry.mode || "pow-writing",
-          note: entry.note || null,
-        });
-        pendingDailyCache = pending;
-      } catch (error) {
-        console.error('API에 적립액 저장 실패:', error);
-        // 실패해도 localStorage에는 저장되어 있음
-      }
-    } else {
-      // entry가 없으면 삭제
-      try {
-        await AccumulatedSatsAPI.delete(currentDiscordId, todayKey);
-        pendingDailyCache = pending;
-      } catch (error) {
-        console.error('API에서 적립액 삭제 실패:', error);
-      }
-    }
-  } else {
-    pendingDailyCache = pending;
-  }
-};
+// ⚠️ DEPRECATED: 하이브리드 시스템에서 더 이상 사용하지 않음
+// 적립액은 Discord 공유 시 AccumulatedSatsAPI.add()로 저장
+// localStorage는 각 위치에서 직접 setItem으로 저장
+// const savePendingDaily = async (pending) => {
+//   localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
+// };
 
 const updateTotals = () => {
   const totalSeconds = getStoredTotal();
@@ -882,7 +852,8 @@ const finishSession = () => {
     entry.goalMinutes = goalMinutes || entry.goalMinutes;
     entry.mode = donationMode?.value || entry.mode;
     pending[todayKey] = entry;
-    savePendingDaily(pending);
+    // localStorage만 저장 (백엔드는 Discord 공유 시 저장)
+    localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
     showAccumulationToast(
       `기부금 * 달성률을 곱해서 ${sessionSats} sats가 적립되었습니다.`
     );
@@ -1503,7 +1474,8 @@ const promptPendingDailyDonation = async () => {
         totalDonatedSats: totalDonatedSats,
       });
       delete pending[pendingDate];
-      savePendingDaily(pending);
+      // localStorage만 정리 (즉시 기부는 적립액과 무관)
+      localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
     },
   });
 };
@@ -1804,10 +1776,10 @@ const openAccumulatedDonationPayment = async () => {
         }
       }
 
-      // pending daily에서 적립액 차감 (localStorage 폴백 - 백엔드 동기화용)
+      // pending daily에서 적립액 차감 (localStorage 정리)
       const pending = getPendingDaily();
       delete pending[todayKey];
-      savePendingDaily(pending);
+      localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
 
       // 기부 기록 저장
       saveDonationHistoryEntry({
@@ -2116,22 +2088,39 @@ const closeWalletSelection = async () => {
         if (currentDonationScope === "session") {
           const accumulate = window.confirm("아직 POW 활동에 대한 기부가 되지 않았습니다. 적립할까요?");
           if (accumulate) {
-            // 적립액에 합산
-            const pending = getPendingDaily();
-            const todayKey = new Date().toISOString().split("T")[0];
-            if (!pending[todayKey]) {
-              pending[todayKey] = {
-                sats: currentDonationSats,
-                seconds: currentDonationPayload?.minutes * 60 || 0,
-                mode: currentDonationPayload?.donationMode || "pow-writing",
-                plan: currentDonationPayload?.plan || "",
-                goalMinutes: currentDonationPayload?.goalRate ? parseInt(currentDonationPayload.goalRate) : 0,
-                note: currentDonationPayload?.donationNote || "",
-              };
-            } else {
-              pending[todayKey].sats += currentDonationSats;
+            // ⭐️ 하이브리드 시스템: 백엔드 적립 + Discord 공유
+
+            // 1. 백엔드 적립액 증가
+            if (currentDiscordId && typeof AccumulatedSatsAPI !== 'undefined') {
+              try {
+                const result = await AccumulatedSatsAPI.add(
+                  currentDiscordId,
+                  currentDonationSats,
+                  null, // session_id는 Discord 공유 시 저장됨
+                  '결제 실패 후 적립'
+                );
+
+                // 2. 메모리 변수 업데이트
+                if (result.success && result.data) {
+                  backendAccumulatedSats = result.data.amount_after;
+                  localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
+                }
+
+                console.log('✅ 결제 실패 후 적립 성공:', result);
+              } catch (error) {
+                console.error('❌ 결제 실패 후 적립 실패:', error);
+              }
             }
-            savePendingDaily(pending);
+
+            // 3. Discord 공유 (인증카드)
+            try {
+              await shareToDiscordOnly();
+              console.log('✅ 결제 실패 후 Discord 공유 성공');
+            } catch (error) {
+              console.error('❌ 결제 실패 후 Discord 공유 실패:', error);
+            }
+
+            // 4. UI 갱신
             showAccumulationToast(`${currentDonationSats}sats가 적립되었습니다.`);
             updateAccumulatedSats();
             updateTodayDonationSummary();
