@@ -796,10 +796,10 @@ const finishSession = () => {
       const modeEmoji = getCategoryLabel(currentMode);
       const planWithCategory = modeEmoji ? `${modeEmoji} ${plan}` : plan;
 
-      // 달성률 계산
+      // 달성률 계산 (초 단위로 정확하게 계산)
       const actualMinutes = Math.round(elapsedSeconds / 60);
       const achievementRate = goalMinutes > 0
-        ? Math.round((actualMinutes / goalMinutes) * 100)
+        ? Math.round((elapsedSeconds / 60 / goalMinutes) * 100)
         : 0;
 
       // 현재 로그인한 사용자 정보 가져오기
