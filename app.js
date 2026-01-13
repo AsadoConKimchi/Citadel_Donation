@@ -82,6 +82,7 @@ let elapsedSeconds = 0;
 let isRunning = false;
 let isResetReady = false;
 let timerStartTime = null;
+let timerEndTime = null;  // ⭐️ 종료시간 기반 타이머
 let elapsedOffsetSeconds = 0;
 let photoSource = null;
 let mediaPreviewUrl = null;
@@ -453,6 +454,19 @@ const startTimer = () => {
   isRunning = true;
   timerStartTime = Date.now();
   elapsedOffsetSeconds = elapsedSeconds;
+
+  // ⭐️ 종료시간 계산 및 저장 (백그라운드 동작 지원)
+  const goalMinutes = parseInt(goalMinutesInput?.value) || 0;
+  if (goalMinutes > 0 && elapsedSeconds === 0) {
+    // 새로 시작하는 경우에만 종료시간 계산
+    timerEndTime = Date.now() + (goalMinutes * 60 * 1000);
+    localStorage.setItem('citadel-timer-end', timerEndTime.toString());
+    localStorage.setItem('citadel-timer-goal', goalMinutes.toString());
+  } else if (timerEndTime) {
+    // 재개하는 경우 기존 종료시간 유지
+    localStorage.setItem('citadel-timer-end', timerEndTime.toString());
+  }
+
   timerInterval = setInterval(tick, 1000);
   setDonationControlsEnabled(false);
   setPauseButtonLabel("일시정지");
@@ -477,6 +491,9 @@ const resetTimer = () => {
   elapsedSeconds = 0;
   elapsedOffsetSeconds = 0;
   timerStartTime = null;
+  timerEndTime = null;  // ⭐️ 종료시간 초기화
+  localStorage.removeItem('citadel-timer-end');
+  localStorage.removeItem('citadel-timer-goal');
   updateDisplay();
   updateSats();
   setDonationControlsEnabled(true);
@@ -1934,13 +1951,13 @@ const startPaymentPolling = () => {
   }
 
   let attemptCount = 0;
-  const maxAttempts = 100; // 5분 (3초 간격 × 100회)
+  const MAX_ATTEMPTS = 3; // 9초 (3초 간격 × 3회)
 
-  console.log('🚀 결제 확인 polling 시작 (최대 5분)');
+  console.log('🚀 결제 확인 polling 시작 (최대 3회)');
 
   paymentPollingInterval = setInterval(async () => {
     attemptCount++;
-    console.log(`💳 결제 확인 polling... (${attemptCount}/${maxAttempts})`);
+    console.log(`💳 결제 확인 polling... (${attemptCount}/${MAX_ATTEMPTS})`);
 
     try {
       const checkResponse = await fetch(`${window.BACKEND_API_URL}/api/blink/check-invoice`, {
@@ -2003,21 +2020,112 @@ const startPaymentPolling = () => {
         }
       }
 
-      // 타임아웃 체크
-      if (attemptCount >= maxAttempts) {
-        console.log('⏱️ Polling 타임아웃 (5분 경과)');
+      // ⭐️ 타임아웃 체크 (3회 실패 시 모달)
+      if (attemptCount >= MAX_ATTEMPTS) {
+        console.log('⏱️ Polling 타임아웃 (3회 실패)');
         clearInterval(paymentPollingInterval);
         paymentPollingInterval = null;
 
-        if (walletStatus) {
-          walletStatus.textContent = "결제 확인 시간이 초과되었습니다. X 버튼을 눌러 수동으로 확인하세요.";
-        }
+        // 결제 실패 모달 표시
+        showPaymentFailedModal();
       }
     } catch (error) {
       console.error('❌ Polling 오류:', error);
       // 다음 polling 계속
     }
   }, 3000); // 3초 간격
+};
+
+// ⭐️ 결제 실패 모달 표시
+const showPaymentFailedModal = async () => {
+  const scope = currentDonationScope;
+  let message = '';
+
+  if (scope === 'session') {
+    // 즉시 기부 실패
+    message = '기부에 실패하였습니다. 적립할까요?';
+  } else {
+    // 적립액 기부 실패
+    message = '기부에 실패하였습니다. 다음에 기부할까요?';
+  }
+
+  if (confirm(message)) {
+    // "예" 선택
+    if (scope === 'session') {
+      // 즉시 기부 → 적립으로 전환
+      try {
+        // 백엔드 적립액 증가
+        if (currentDiscordId && typeof AccumulatedSatsAPI !== 'undefined') {
+          const result = await AccumulatedSatsAPI.add(
+            currentDiscordId,
+            currentDonationSats,
+            null,
+            '결제 실패 후 적립'
+          );
+
+          if (result.success && result.data) {
+            backendAccumulatedSats = result.data.amount_after;
+            localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
+          }
+
+          console.log('✅ 결제 실패 후 적립 성공:', result);
+        }
+
+        // Discord 공유 (currentDonationPayload 사용)
+        if (currentDonationPayload) {
+          await shareToDiscordOnly();
+          console.log('✅ 결제 실패 후 Discord 공유 성공');
+        }
+
+        showAccumulationToast(`${currentDonationSats}sats가 적립되었습니다.`);
+        updateAccumulatedSats();
+        updateTodayDonationSummary();
+      } catch (error) {
+        console.error('❌ 적립 처리 실패:', error);
+        alert('적립 처리 중 오류가 발생했습니다: ' + error.message);
+      }
+    } else {
+      // 적립액 기부 → 적립액 유지
+      console.log('적립액 유지 - 나중에 기부');
+    }
+
+    // 모달 닫기
+    closeWalletSelection();
+  } else {
+    // "아니오" 선택 → 1회 재확인
+    console.log('1회 재확인 시도');
+
+    try {
+      const checkResponse = await fetch(`${window.BACKEND_API_URL}/api/blink/check-invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentRequest: currentInvoice }),
+      });
+
+      if (checkResponse.ok) {
+        const checkResult = await checkResponse.json();
+
+        if (checkResult?.success && checkResult.data?.paid) {
+          // 결제 확인 성공
+          console.log('✅ 재확인 성공!');
+          await pendingOnSuccessCallback();
+          closeWalletSelection();
+          showAccumulationToast("기부가 완료되었습니다! 🎉");
+          updateAccumulatedSats();
+          updateTodayDonationSummary();
+          return;
+        }
+      }
+
+      // 재확인도 실패
+      alert('결제 확인에 실패했습니다. 나중에 다시 시도해주세요.');
+      closeWalletSelection();
+    } catch (error) {
+      console.error('❌ 재확인 오류:', error);
+      alert('결제 확인 중 오류가 발생했습니다.');
+      closeWalletSelection();
+    }
+  }
 };
 
 const closeWalletSelection = async () => {
@@ -2680,13 +2788,33 @@ const handleMediaFile = async (file) => {
   resetMediaPreview();
   if (file.type.startsWith("video/")) {
     try {
+      // ⭐️ 동영상 재생 시간 체크 (10초 제한)
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+
+      await new Promise((resolve, reject) => {
+        video.addEventListener('loadedmetadata', () => {
+          if (video.duration > 10) {
+            reject(new Error(`동영상은 10초 이내로 업로드해주세요. (현재: ${Math.round(video.duration)}초)`));
+          } else {
+            resolve(null);
+          }
+          URL.revokeObjectURL(video.src);
+        });
+        video.addEventListener('error', () => {
+          reject(new Error('동영상 메타데이터를 불러올 수 없습니다.'));
+          URL.revokeObjectURL(video.src);
+        });
+      });
+
       const dataUrl = await readFileAsDataUrl(file);
       selectedVideoDataUrl = dataUrl;
       selectedVideoFilename = file.name || "study-video";
       await loadVideoThumbnail(file);
       photoSource = photoPreview;
     } catch (error) {
-      alert("동영상을 불러올 수 없습니다. 다른 파일을 선택해주세요.");
+      alert(error.message || "동영상을 불러올 수 없습니다. 다른 파일을 선택해주세요.");
+      return;
     }
     return;
   }
@@ -2769,14 +2897,6 @@ const drawBadge = (sessionOverride = null) => {
     60,
     badgeCanvas.height - overlayHeight + 285
   );
-
-  const scopeValue = donationScope?.value || "session";
-  const badgeSats = getDonationSatsForScope();
-  const badgeSatsLabel =
-    scopeValue === "total"
-      ? `현재 적립금액 : ${badgeSats}sats`
-      : `POW Donation : ${badgeSats}sats`;
-  context.fillText(badgeSatsLabel, 60, badgeCanvas.height - overlayHeight + 325);
 
   context.font = "24px sans-serif";
   const date = new Date().toLocaleDateString("ko-KR", {
@@ -2957,11 +3077,11 @@ const shareToDiscordOnly = async () => {
       donationPage = 1;
     } else {
       // ⭐️ 적립 후 기부 모드: 백엔드에 적립액 저장
-      if (typeof AccumulatedSatsAPI !== 'undefined' && sessionData.user?.id) {
+      if (typeof AccumulatedSatsAPI !== 'undefined' && currentDiscordId) {
         try {
           const satsToAccumulate = donationSats;
           const result = await AccumulatedSatsAPI.add(
-            sessionData.user.id,
+            currentDiscordId,
             satsToAccumulate,
             lastSession.sessionId || null,  // 빈 문자열 → null 변환
             donationNote?.value?.trim() || null
@@ -3035,8 +3155,50 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// 타이머 복원 함수 (백그라운드 동작 지원)
+const restoreTimerState = () => {
+  const savedEndTime = localStorage.getItem('citadel-timer-end');
+  const savedGoal = localStorage.getItem('citadel-timer-goal');
+
+  if (savedEndTime) {
+    timerEndTime = parseInt(savedEndTime, 10);
+    const now = Date.now();
+
+    if (now < timerEndTime) {
+      // 아직 목표 시간 전 - 경과 시간 복원
+      const goalMinutes = parseInt(savedGoal, 10) || 0;
+      const totalDuration = goalMinutes * 60 * 1000;
+      const elapsed = totalDuration - (timerEndTime - now);
+      elapsedSeconds = Math.floor(elapsed / 1000);
+      elapsedOffsetSeconds = elapsedSeconds;
+
+      // 타이머는 자동으로 재시작하지 않음 (사용자가 "재개" 클릭해야 함)
+      updateDisplay();
+      updateSats();
+
+      console.log(`⏱️ 타이머 복원: ${Math.floor(elapsedSeconds / 60)}분 ${elapsedSeconds % 60}초 경과`);
+    } else {
+      // 목표 시간 초과 - 목표 시간으로 설정
+      const goalMinutes = parseInt(savedGoal, 10) || 0;
+      elapsedSeconds = goalMinutes * 60;
+      elapsedOffsetSeconds = elapsedSeconds;
+
+      // localStorage 정리
+      localStorage.removeItem('citadel-timer-end');
+      localStorage.removeItem('citadel-timer-goal');
+      timerEndTime = null;
+
+      updateDisplay();
+      updateSats();
+
+      console.log(`⏱️ 타이머 복원: 목표 시간(${goalMinutes}분) 도달`);
+    }
+  }
+};
+
 // 로그인 후 setAuthState에서 초기화됨
 initializeTotals();
+restoreTimerState();
 
 walletModalClose?.addEventListener("click", closeWalletSelection);
 walletModal?.addEventListener("click", (event) => {
