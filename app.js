@@ -1475,7 +1475,7 @@ const promptPendingDailyDonation = async () => {
       }
 
       // 사용자 알림
-      showAccumulationToast(`적립된 ${entry.sats} sats가 백엔드로 이동되었습니다. "오늘 기부 현황"에서 확인할 수 있습니다.`);
+      showAccumulationToast(`${entry.sats} sats가 적립되어 있습니다. "오늘 기부 현황"에서 기부할 수 있습니다.`);
     } catch (error) {
       console.error('마이그레이션 실패:', error);
       alert(`적립액 마이그레이션에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
