@@ -3,11 +3,12 @@
  * iOS 17+ PWA Push 알림 및 캐싱 지원
  */
 
-const CACHE_NAME = 'citadel-pow-v1';
+const CACHE_NAME = 'citadel-pow-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
+  '/api.js',
   '/js/app.js',
   '/js/utils.js',
   '/js/notification.js',

@@ -1,4 +1,7 @@
-// Citadel POW Backend API 통신 유틸리티
+/**
+ * Citadel POW Backend API 통신 유틸리티
+ * ES6 Module
+ */
 
 // 백엔드 API URL (환경 변수 또는 기본값)
 const API_BASE_URL = window.BACKEND_API_URL || 'https://citadel-pow-backend.magadenuevo2025.workers.dev';
@@ -42,7 +45,7 @@ async function apiRequest(endpoint, options = {}) {
 /**
  * 사용자 API
  */
-const UserAPI = {
+export const UserAPI = {
   // 사용자 생성/업데이트
   async upsert(discordId, username, avatar) {
     return apiRequest('/api/users', {
@@ -77,7 +80,7 @@ const UserAPI = {
 /**
  * 공부 세션 API
  */
-const StudySessionAPI = {
+export const StudySessionAPI = {
   // 공부 세션 생성
   async create(discordId, sessionData) {
     const payload = {
@@ -156,7 +159,7 @@ const StudySessionAPI = {
 /**
  * 기부 API
  */
-const DonationAPI = {
+export const DonationAPI = {
   // 기부 생성 (확장된 필드 포함)
   async create(discordId, donationData) {
     const payload = {
@@ -222,7 +225,7 @@ const DonationAPI = {
 /**
  * 순위 API
  */
-const RankingAPI = {
+export const RankingAPI = {
   // 현재 주차 순위 조회
   async getCurrent() {
     return apiRequest('/api/rankings/current');
@@ -245,7 +248,7 @@ const RankingAPI = {
 /**
  * localStorage 데이터를 백엔드로 마이그레이션
  */
-async function migrateLocalStorageToBackend(discordId) {
+export async function migrateLocalStorageToBackend(discordId) {
   if (!discordId) {
     console.error('Discord ID가 필요합니다.');
     return;
@@ -298,7 +301,7 @@ async function migrateLocalStorageToBackend(discordId) {
 /**
  * Meet-up API
  */
-const MeetupAPI = {
+export const MeetupAPI = {
   // Meet-up 생성 (Organizer only)
   async create(discordId, meetupData) {
     return apiRequest('/api/meetups', {
@@ -405,7 +408,7 @@ const MeetupAPI = {
 /**
  * 적립액 API (하이브리드 시스템)
  */
-const AccumulatedSatsAPI = {
+export const AccumulatedSatsAPI = {
   // 현재 적립액 조회
   async get(discordId) {
     return apiRequest(`/api/accumulated-sats/user/${discordId}`);
@@ -448,3 +451,15 @@ const AccumulatedSatsAPI = {
     return apiRequest('/api/accumulated-sats/validate');
   },
 };
+
+// 하위 호환성: 비-모듈 스크립트를 위한 window 연결
+// (study-history.html, my-pow-records.html, group-meetups.html 등에서 사용)
+if (typeof window !== 'undefined') {
+  window.UserAPI = UserAPI;
+  window.StudySessionAPI = StudySessionAPI;
+  window.DonationAPI = DonationAPI;
+  window.RankingAPI = RankingAPI;
+  window.MeetupAPI = MeetupAPI;
+  window.AccumulatedSatsAPI = AccumulatedSatsAPI;
+  window.migrateLocalStorageToBackend = migrateLocalStorageToBackend;
+}

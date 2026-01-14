@@ -4,6 +4,7 @@
  */
 
 import { setCurrentDiscordId, currentDiscordId } from './storage.js';
+import { UserAPI } from '../api.js';
 
 // DOM 요소 참조
 let discordAppLogin = null;
@@ -118,8 +119,8 @@ export const updateDiscordProfile = ({ user, guild, authorized, userLevel }) => 
       discordAvatar.classList.add("status-ok");
 
       // 백엔드에 사용자 등록/업데이트
-      if (typeof window.UserAPI !== 'undefined' && user?.id) {
-        window.UserAPI.upsert(user.id, user.username, user.avatar)
+      if (user?.id) {
+        UserAPI.upsert(user.id, user.username, user.avatar)
           .then(() => console.log('사용자 정보가 백엔드에 저장되었습니다.'))
           .catch(err => console.error('백엔드 사용자 저장 오류:', err));
       }
@@ -343,10 +344,8 @@ const handleAuthorized = (user, guild, userLevel) => {
 
 // 사용자 설정 로드
 const loadUserSettings = async (discordId) => {
-  if (typeof window.UserAPI === 'undefined') return;
-
   try {
-    const response = await window.UserAPI.get(discordId);
+    const response = await UserAPI.get(discordId);
     if (response.success && response.data) {
       const { donation_scope } = response.data;
       if (donation_scope && donationScope) {
@@ -411,6 +410,8 @@ export const shareToDiscordAPI = async ({
   totalDonatedSats,
   totalAccumulatedSats,
   donationNote: noteValue,
+  videoDataUrl = null,
+  videoFilename = null,
 }) => {
   const sessionResponse = await fetch('/api/session');
   const sessionData = await sessionResponse.json();
@@ -431,6 +432,9 @@ export const shareToDiscordAPI = async ({
     total_donated_sats: totalDonatedSats,
     total_accumulated_sats: totalAccumulatedSats,
     donation_note: noteValue || "",
+    // 동영상 첨부 (선택)
+    video_url: videoDataUrl || null,
+    video_filename: videoFilename || null,
   };
 
   const response = await fetch("https://citadel-pow-backend.magadenuevo2025.workers.dev/api/discord-posts/share", {

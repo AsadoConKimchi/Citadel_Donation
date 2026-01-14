@@ -4,6 +4,7 @@
  */
 
 import { getTodayKey, parseGoalMinutes, formatTime, donationModeLabels } from './utils.js';
+import { UserAPI, StudySessionAPI, AccumulatedSatsAPI } from '../api.js';
 import {
   loadSessions,
   saveSessions,
@@ -279,9 +280,9 @@ const initToggleButtons = () => {
           localStorage.setItem(donationScopeKey, value);
 
           // 백엔드에 저장
-          if (currentDiscordId && typeof window.UserAPI !== 'undefined') {
+          if (currentDiscordId) {
             try {
-              await window.UserAPI.updateSettings(currentDiscordId, {
+              await UserAPI.updateSettings(currentDiscordId, {
                 donation_scope: value,
               });
             } catch (error) {
@@ -348,32 +349,31 @@ const handleFinishSession = () => {
   const planWithCategory = modeEmoji ? `${modeEmoji} ${plan}` : plan;
 
   // 백엔드에 세션 저장
-  if (typeof window.StudySessionAPI !== 'undefined') {
-    const endTime = new Date(sessionData.timestamp);
-    const startTime = new Date(endTime.getTime() - sessionData.durationSeconds * 1000);
-    const actualMinutes = Math.round(sessionData.durationSeconds / 60);
-    const achievementRate = sessionData.goalMinutes > 0
-      ? Math.round((sessionData.durationSeconds / 60 / sessionData.goalMinutes) * 100)
-      : 0;
+  const endTime = new Date(sessionData.timestamp);
+  const startTime = new Date(endTime.getTime() - sessionData.durationSeconds * 1000);
+  const actualMinutes = Math.round(sessionData.durationSeconds / 60);
+  const achievementRate = sessionData.goalMinutes > 0
+    ? Math.round((sessionData.durationSeconds / 60 / sessionData.goalMinutes) * 100)
+    : 0;
 
-    (async () => {
-      let photoDataUrl = getBadgeDataUrl();
-      if (!photoDataUrl || photoDataUrl === "data:,") {
-        if (hasPhotoSource()) {
-          drawBadge({
-            sessionOverride: sessionData,
-            donationModeValue: currentMode,
-            planText: plan,
-          });
-          photoDataUrl = getBadgeDataUrl();
-        }
+  (async () => {
+    let photoDataUrl = getBadgeDataUrl();
+    if (!photoDataUrl || photoDataUrl === "data:,") {
+      if (hasPhotoSource()) {
+        drawBadge({
+          sessionOverride: sessionData,
+          donationModeValue: currentMode,
+          planText: plan,
+        });
+        photoDataUrl = getBadgeDataUrl();
       }
+    }
 
-      try {
-        const res = await fetch('/api/session');
-        const sessionInfo = await res.json();
-        if (sessionInfo.authenticated && sessionInfo.user?.id) {
-          await window.StudySessionAPI.create(sessionInfo.user.id, {
+    try {
+      const res = await fetch('/api/session');
+      const sessionInfo = await res.json();
+      if (sessionInfo.authenticated && sessionInfo.user?.id) {
+        await StudySessionAPI.create(sessionInfo.user.id, {
             donationMode: currentMode,
             planText: planWithCategory,
             startTime: startTime.toISOString(),
@@ -390,7 +390,6 @@ const handleFinishSession = () => {
         console.error('백엔드 세션 저장 오류:', err);
       }
     })();
-  }
 
   // 적립 후 기부 모드 처리
   if (getDonationScopeValue() === "total") {
@@ -490,6 +489,7 @@ const openLightningWallet = async () => {
   await openLightningWalletWithPayload(payload, {
     onSuccess: async () => {
       try {
+        const video = getSelectedVideo();
         await shareToDiscordAPI({
           sessionId: sessionId,
           dataUrl: dataUrl,
@@ -500,6 +500,8 @@ const openLightningWallet = async () => {
           totalDonatedSats: totalDonatedSats,
           totalAccumulatedSats: totalAccumulatedSats,
           donationNote: note,
+          videoDataUrl: video?.dataUrl || null,
+          videoFilename: video?.filename || null,
         });
       } catch (error) {
         console.error("Discord 공유 실패:", error);
@@ -557,6 +559,7 @@ const shareToDiscordOnly = async () => {
     : 0;
 
   try {
+    const video = getSelectedVideo();
     await shareToDiscordAPI({
       sessionId: lastSession.sessionId,
       dataUrl: dataUrl,
@@ -567,6 +570,8 @@ const shareToDiscordOnly = async () => {
       totalDonatedSats: totalDonatedSats,
       totalAccumulatedSats: totalAccumulatedSats,
       donationNote: donationNote?.value?.trim() || "",
+      videoDataUrl: video?.dataUrl || null,
+      videoFilename: video?.filename || null,
     });
 
     if (shareStatus) {
@@ -574,22 +579,20 @@ const shareToDiscordOnly = async () => {
     }
 
     // 적립 후 기부 모드: 백엔드에 적립액 저장
-    if (donationScopeValue === "total") {
-      if (typeof window.AccumulatedSatsAPI !== 'undefined' && currentDiscordId) {
-        try {
-          const result = await window.AccumulatedSatsAPI.add(
-            currentDiscordId,
-            donationSats,
-            lastSession.sessionId || null,
-            donationNote?.value?.trim() || null
-          );
+    if (donationScopeValue === "total" && currentDiscordId) {
+      try {
+        const result = await AccumulatedSatsAPI.add(
+          currentDiscordId,
+          donationSats,
+          lastSession.sessionId || null,
+          donationNote?.value?.trim() || null
+        );
 
-          if (result.success && result.data) {
-            setBackendAccumulatedSats(result.data.amount_after);
-          }
-        } catch (error) {
-          console.error('적립액 저장 실패:', error);
+        if (result.success && result.data) {
+          setBackendAccumulatedSats(result.data.amount_after);
         }
+      } catch (error) {
+        console.error('적립액 저장 실패:', error);
       }
     }
 

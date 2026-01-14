@@ -4,6 +4,7 @@
  */
 
 import { getTodayKey } from './utils.js';
+import { StudySessionAPI, DonationAPI, AccumulatedSatsAPI } from '../api.js';
 
 // 캐시 변수
 let sessionsCache = null;
@@ -69,12 +70,12 @@ export const saveSessions = (sessions) => {
 
 // API에서 세션 로드
 export const loadSessionsFromAPI = async () => {
-  if (!currentDiscordId || typeof window.StudySessionAPI === 'undefined') {
+  if (!currentDiscordId) {
     return [];
   }
 
   try {
-    const response = await window.StudySessionAPI.getToday(currentDiscordId);
+    const response = await StudySessionAPI.getToday(currentDiscordId);
     if (response.success && response.data) {
       const sessions = response.data.map(apiSession => {
         const durationSeconds = apiSession.duration_seconds || (apiSession.duration_minutes * 60);
@@ -123,12 +124,12 @@ export const getDonationHistory = () => {
 
 // API에서 기부 기록 로드
 export const loadDonationsFromAPI = async () => {
-  if (!currentDiscordId || typeof window.DonationAPI === 'undefined') {
+  if (!currentDiscordId) {
     return [];
   }
 
   try {
-    const response = await window.DonationAPI.getByUser(currentDiscordId);
+    const response = await DonationAPI.getByUser(currentDiscordId);
     if (response.success && response.user && response.user.donations) {
       const donations = response.user.donations.map(apiDonation => ({
         date: apiDonation.date || apiDonation.created_at.split('T')[0],
@@ -167,9 +168,9 @@ export const saveDonationHistoryEntry = async (entry) => {
   donationsCache = history;
 
   // 로그인한 경우 API에도 저장
-  if (currentDiscordId && typeof window.DonationAPI !== 'undefined' && entry.isPaid) {
+  if (currentDiscordId && entry.isPaid) {
     try {
-      await window.DonationAPI.create(currentDiscordId, {
+      await DonationAPI.create(currentDiscordId, {
         amount: entry.sats,
         currency: 'SAT',
         date: entry.date,
@@ -217,12 +218,12 @@ export const getPendingDaily = () => {
 
 // API에서 적립액 로드
 export const loadPendingDailyFromAPI = async () => {
-  if (!currentDiscordId || typeof window.AccumulatedSatsAPI === 'undefined') {
+  if (!currentDiscordId) {
     return;
   }
 
   try {
-    const response = await window.AccumulatedSatsAPI.get(currentDiscordId);
+    const response = await AccumulatedSatsAPI.get(currentDiscordId);
     if (response.success && response.data) {
       backendAccumulatedSats = response.data.accumulated_sats || 0;
       console.log(`✅ 백엔드 적립액 로드 완료: ${backendAccumulatedSats} sats`);
