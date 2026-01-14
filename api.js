@@ -78,7 +78,10 @@ export const UserAPI = {
 };
 
 /**
- * 공부 세션 API
+ * Algorithm v3: 공부 세션 API
+ * - achievement_rate: 저장 안함 (백엔드에서 런타임 계산)
+ * - donation_id: 저장 안함 (donations.session_id로 단방향 참조)
+ * - goal_seconds: 초 단위 지원
  */
 export const StudySessionAPI = {
   // 공부 세션 생성
@@ -94,15 +97,15 @@ export const StudySessionAPI = {
       start_time: sessionData.startTime,
       end_time: sessionData.endTime,
       duration_seconds: sessionData.durationSeconds,
-      duration_minutes: sessionData.durationMinutes,
-      goal_minutes: sessionData.goalMinutes || 0,
-      achievement_rate: sessionData.achievementRate || 0,
+      // Algorithm v3: goal_seconds 우선 사용
+      goal_seconds: sessionData.goalSeconds || (sessionData.goalMinutes ? sessionData.goalMinutes * 60 : 0),
 
       // 인증카드
       photo_url: sessionData.photoUrl || null,
 
-      // 기부 연결
-      donation_id: sessionData.donationId || null,
+      // Algorithm v3: 아래 필드는 저장하지 않음
+      // achievement_rate: 백엔드에서 런타임 계산
+      // donation_id: donations.session_id로 단방향 참조
     };
 
     console.log('📤 공부 세션 페이로드:', payload);

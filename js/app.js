@@ -79,6 +79,7 @@ import {
   getDonationSatsForScope,
   setGoalMinutesGetter,
   setCurrentDonationInfo,
+  calculateAchievementRate, // Algorithm v3: 런타임 계산
 } from './donation.js';
 import {
   initDiscord,
@@ -351,10 +352,8 @@ const handleFinishSession = () => {
   // 백엔드에 세션 저장
   const endTime = new Date(sessionData.timestamp);
   const startTime = new Date(endTime.getTime() - sessionData.durationSeconds * 1000);
-  const actualMinutes = Math.round(sessionData.durationSeconds / 60);
-  const achievementRate = sessionData.goalMinutes > 0
-    ? Math.round((sessionData.durationSeconds / 60 / sessionData.goalMinutes) * 100)
-    : 0;
+  // Algorithm v3: goal_seconds 단위로 변환
+  const goalSeconds = (sessionData.goalMinutes || 0) * 60;
 
   (async () => {
     let photoDataUrl = getBadgeDataUrl();
@@ -373,17 +372,17 @@ const handleFinishSession = () => {
       const res = await fetch('/api/session');
       const sessionInfo = await res.json();
       if (sessionInfo.authenticated && sessionInfo.user?.id) {
+        // Algorithm v3: achievement_rate, donation_id 저장 안함 (런타임 계산)
         await StudySessionAPI.create(sessionInfo.user.id, {
             donationMode: currentMode,
             planText: planWithCategory,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
             durationSeconds: sessionData.durationSeconds,
-            durationMinutes: actualMinutes,
-            goalMinutes: sessionData.goalMinutes || 0,
-            achievementRate: achievementRate,
+            goalSeconds: goalSeconds,
             photoUrl: photoDataUrl,
-            donationId: null,
+            // achievement_rate: 저장 안함 (백엔드에서 런타임 계산)
+            // donation_id: 저장 안함 (donations.session_id로 단방향 참조)
           });
         }
       } catch (err) {
@@ -448,6 +447,11 @@ const handleFinishSession = () => {
 // Lightning 지갑 열기
 // ========================================
 
+// ============================================
+// Algorithm v3: Lightning 지갑 열기
+// - achievement_rate: 런타임 계산 (저장 안함)
+// - total_donated_sats: 런타임 계산 (저장 안함)
+// ============================================
 const openLightningWallet = async () => {
   const { sats, seconds: donationSeconds, scope } = getDonationPaymentSnapshot();
   let dataUrl = getBadgeDataUrl();
@@ -458,31 +462,29 @@ const openLightningWallet = async () => {
   }
 
   const lastSession = getLastSessionSeconds();
-  const totalDonatedSats = getTotalDonatedSats() + sats;
-  const totalMinutes = Math.floor(donationSeconds / 60);
   const mode = donationMode?.value || "pow-writing";
   const note = donationNote?.value?.trim() || "";
-  const sessionId = scope === "session" ? lastSession.sessionId : "";
+  const sessionId = scope === "session" ? lastSession.sessionId : null;
   const accumulatedSats = getSessionAccumulatedSats();
-  const totalAccumulatedSats = getDonationSatsForScope();
+
+  // Algorithm v3: goal_seconds 단위 사용
+  const goalSeconds = (lastSession.goalMinutes || 0) * 60;
 
   const payload = buildDonationPayload({
     dataUrl,
     plan: lastSession.plan,
     durationSeconds: donationSeconds,
-    goalMinutes: lastSession.goalMinutes,
+    goalSeconds: goalSeconds,
     sats,
     donationModeValue: mode,
     donationScopeValue: scope,
     donationNoteValue: note,
-    totalDonatedSats,
     accumulatedSats,
-    totalAccumulatedSats,
+    sessionId: sessionId,
   });
 
-  const achievementRate = lastSession.goalMinutes > 0
-    ? Math.round((totalMinutes / lastSession.goalMinutes) * 100)
-    : 0;
+  // Algorithm v3: 달성률은 런타임 계산
+  const achievementRate = calculateAchievementRate(donationSeconds, goalSeconds);
 
   setCurrentDonationInfo(scope, sats, payload);
 
@@ -497,8 +499,6 @@ const openLightningWallet = async () => {
           durationSeconds: donationSeconds,
           donationScope: scope,
           donationSats: sats,
-          totalDonatedSats: totalDonatedSats,
-          totalAccumulatedSats: totalAccumulatedSats,
           donationNote: note,
           videoDataUrl: video?.dataUrl || null,
           videoFilename: video?.filename || null,
@@ -508,23 +508,22 @@ const openLightningWallet = async () => {
         alert("Discord 공유에 실패했습니다: " + error.message);
       }
 
+      // Algorithm v3: 간소화된 기부 기록 (런타임 계산 필드 제외)
       saveDonationHistoryEntry({
         date: todayKey,
         sats,
-        minutes: totalMinutes,
         seconds: donationSeconds,
+        goalSeconds: goalSeconds,
         mode,
         scope,
         sessionId,
         note,
         isPaid: true,
         planText: lastSession.plan,
-        goalMinutes: lastSession.goalMinutes,
-        achievementRate: achievementRate,
         photoUrl: dataUrl,
         accumulatedSats: scope === "session" ? 0 : accumulatedSats,
-        totalAccumulatedSats: totalAccumulatedSats,
-        totalDonatedSats: totalDonatedSats,
+        // Algorithm v3: 아래 필드는 저장하지 않음 (런타임 계산)
+        // achievementRate, totalAccumulatedSats, totalDonatedSats
       });
 
       showAccumulationToast("기부 및 Discord 공유가 완료되었습니다. 페이지를 새로고침합니다...");
@@ -539,6 +538,10 @@ const openLightningWallet = async () => {
 // Discord 공유만
 // ========================================
 
+// ============================================
+// Algorithm v3: Discord 공유만 (적립 후 기부 모드)
+// PARTIAL UNIQUE로 중복 적립 방지 (백엔드)
+// ============================================
 const shareToDiscordOnly = async () => {
   let dataUrl = getBadgeDataUrl();
   if (!dataUrl || dataUrl === "data:,") {
@@ -553,13 +556,10 @@ const shareToDiscordOnly = async () => {
   const lastSession = getLastSessionSeconds();
   const donationScopeValue = getDonationScopeValue();
   const donationSats = getCurrentSessionSats();
-  const totalDonatedSats = getTotalDonatedSats();
-  const totalAccumulatedSats = donationScopeValue === "total"
-    ? backendAccumulatedSats + donationSats
-    : 0;
 
   try {
     const video = getSelectedVideo();
+    // Algorithm v3: 런타임 계산 필드 제외
     await shareToDiscordAPI({
       sessionId: lastSession.sessionId,
       dataUrl: dataUrl,
@@ -567,8 +567,6 @@ const shareToDiscordOnly = async () => {
       durationSeconds: lastSession.durationSeconds,
       donationScope: donationScopeValue,
       donationSats: donationSats,
-      totalDonatedSats: totalDonatedSats,
-      totalAccumulatedSats: totalAccumulatedSats,
       donationNote: donationNote?.value?.trim() || "",
       videoDataUrl: video?.dataUrl || null,
       videoFilename: video?.filename || null,
@@ -578,13 +576,14 @@ const shareToDiscordOnly = async () => {
       shareStatus.textContent = "디스코드 공유를 완료했습니다.";
     }
 
-    // 적립 후 기부 모드: 백엔드에 적립액 저장
+    // Algorithm v3: 적립 후 기부 모드 - 백엔드에 적립액 저장
+    // PARTIAL UNIQUE 제약조건으로 중복 적립 방지
     if (donationScopeValue === "total" && currentDiscordId) {
       try {
         const result = await AccumulatedSatsAPI.add(
           currentDiscordId,
           donationSats,
-          lastSession.sessionId || null,
+          lastSession.sessionId || null, // session_id로 중복 체크
           donationNote?.value?.trim() || null
         );
 
@@ -592,7 +591,12 @@ const shareToDiscordOnly = async () => {
           setBackendAccumulatedSats(result.data.amount_after);
         }
       } catch (error) {
-        console.error('적립액 저장 실패:', error);
+        // Algorithm v3: DUPLICATE_SESSION 에러는 이미 적립된 경우
+        if (error?.code === 'DUPLICATE_SESSION') {
+          console.log('이미 적립된 세션입니다.');
+        } else {
+          console.error('적립액 저장 실패:', error);
+        }
       }
     }
 

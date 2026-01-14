@@ -166,11 +166,14 @@ export const getSessionEstimateSeconds = () => {
   return getLastSessionSeconds().durationSeconds;
 };
 
-// sats 계산
+// ============================================
+// Algorithm v3: sats 계산 (FLOOR 사용)
+// ============================================
 export const calculateSatsForGoal = ({ rate, seconds, goalMinutes }) => {
   if (!rate) return 0;
   const progressRate = getGoalProgressFor(seconds, goalMinutes) / 100;
-  return Math.round(rate * progressRate);
+  // Algorithm v3: FLOOR로 정수 처리 (반올림 대신 내림)
+  return Math.floor(rate * progressRate);
 };
 
 export const calculateSats = ({ rate, seconds, goalMinutes }) =>
@@ -179,6 +182,12 @@ export const calculateSats = ({ rate, seconds, goalMinutes }) =>
     seconds,
     goalMinutes: goalMinutes ?? getCurrentGoalMinutes(),
   });
+
+// Algorithm v3: 달성률 런타임 계산 (저장 안함)
+export const calculateAchievementRate = (durationSeconds, goalSeconds) => {
+  if (!goalSeconds || goalSeconds <= 0) return 100; // 목표 없음 = 100%
+  return Math.floor((durationSeconds / goalSeconds) * 100);
+};
 
 // 세션 적립 sats
 export const getSessionAccumulatedSats = () => {
@@ -437,40 +446,54 @@ const startPaymentPolling = () => {
   }, 3000);
 };
 
-// 기부 페이로드 생성
+// ============================================
+// Algorithm v3: 기부 페이로드 생성 (간소화)
+// - achievement_rate: 런타임 계산 (저장 안함)
+// - total_donated_sats: 런타임 계산 (저장 안함)
+// - total_accumulated_sats: 런타임 계산 (저장 안함)
+// ============================================
 export const buildDonationPayload = ({
   dataUrl,
   plan,
   durationSeconds,
   goalMinutes,
+  goalSeconds, // Algorithm v3: seconds 단위 지원
   sats,
   donationScopeValue,
   donationModeValue,
   donationNoteValue,
-  totalDonatedSats = 0,
   accumulatedSats = 0,
+  sessionId = null, // Algorithm v3: 세션 연결
+  // Deprecated (하위 호환성) - 저장하지 않음
+  totalDonatedSats = 0,
   totalAccumulatedSats = 0,
 }) => {
-  const goalRate = goalMinutes
-    ? Math.min(100, (durationSeconds / 60 / goalMinutes) * 100).toFixed(1)
-    : "0.0";
+  // Algorithm v3: 달성률은 런타임에 계산 (저장 안함)
+  const effectiveGoalSeconds = goalSeconds || (goalMinutes ? goalMinutes * 60 : 0);
+  const achievementRate = calculateAchievementRate(durationSeconds || 0, effectiveGoalSeconds);
 
   return {
     dataUrl,
     plan: plan || "목표 미입력",
     studyTime: formatTime(durationSeconds || 0),
-    goalRate: `${goalRate}%`,
+    // Algorithm v3: 달성률은 표시용만 (저장 안함)
+    goalRate: `${achievementRate}%`,
+    achievementRate, // 숫자 값 (표시용)
     minutes: Math.floor((durationSeconds || 0) / 60),
+    durationSeconds: durationSeconds || 0,
+    goalSeconds: effectiveGoalSeconds,
     sats,
     donationMode: donationModeValue || "pow-writing",
     donationScope: donationScopeValue || "total",
     donationNote: donationNoteValue || "",
-    totalDonatedSats,
-    accumulatedSats,
-    totalAccumulatedSats,
+    accumulatedSats, // 기부 시점 적립액 스냅샷 (표시용)
+    sessionId, // Algorithm v3: 세션 연결
     username: loginUserName?.textContent || "",
     videoDataUrl: selectedVideoDataUrl,
     videoFilename: selectedVideoFilename,
+    // Deprecated (하위 호환성)
+    totalDonatedSats,
+    totalAccumulatedSats,
   };
 };
 

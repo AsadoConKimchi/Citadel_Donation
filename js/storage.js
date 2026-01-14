@@ -68,7 +68,11 @@ export const saveSessions = (sessions) => {
   sessionsCache = sessions;
 };
 
-// API에서 세션 로드
+// ============================================
+// Algorithm v3: API에서 세션 로드
+// - achievement_rate: 백엔드에서 런타임 계산됨
+// - goal_seconds: 초 단위 지원
+// ============================================
 export const loadSessionsFromAPI = async () => {
   if (!currentDiscordId) {
     return [];
@@ -79,11 +83,18 @@ export const loadSessionsFromAPI = async () => {
     if (response.success && response.data) {
       const sessions = response.data.map(apiSession => {
         const durationSeconds = apiSession.duration_seconds || (apiSession.duration_minutes * 60);
+        // Algorithm v3: goal_seconds 우선 사용
+        const goalSeconds = apiSession.goal_seconds || (apiSession.goal_minutes * 60) || 0;
+        // Algorithm v3: achievement_rate는 백엔드에서 런타임 계산됨
+        const achievementRate = apiSession.achievement_rate || 0;
+
         return {
           durationSeconds,
-          goalMinutes: apiSession.goal_minutes || 0,
+          goalSeconds,
+          goalMinutes: apiSession.goal_minutes || Math.round(goalSeconds / 60),
           plan: apiSession.plan_text || "",
-          achieved: apiSession.achievement_rate >= 100,
+          achieved: achievementRate >= 100,
+          achievementRate,
           timestamp: apiSession.created_at,
           sessionId: apiSession.id,
         };
@@ -122,7 +133,10 @@ export const getDonationHistory = () => {
   }
 };
 
-// API에서 기부 기록 로드
+// ============================================
+// Algorithm v3: API에서 기부 기록 로드
+// - status: 'paid' 또는 'completed'는 모두 결제됨으로 처리
+// ============================================
 export const loadDonationsFromAPI = async () => {
   if (!currentDiscordId) {
     return [];
@@ -134,14 +148,16 @@ export const loadDonationsFromAPI = async () => {
       const donations = response.user.donations.map(apiDonation => ({
         date: apiDonation.date || apiDonation.created_at.split('T')[0],
         sats: apiDonation.amount || 0,
-        minutes: apiDonation.duration_minutes || Math.floor((apiDonation.duration_seconds || 0) / 60),
-        seconds: apiDonation.duration_seconds || 0,
         mode: apiDonation.donation_mode || 'pow-writing',
         scope: apiDonation.donation_scope || 'session',
         sessionId: apiDonation.session_id || '',
         note: apiDonation.note || apiDonation.message || '',
-        isPaid: apiDonation.status === 'completed',
+        // Algorithm v3: 'paid' 또는 'completed'는 모두 결제됨으로 처리
+        isPaid: apiDonation.status === 'completed' || apiDonation.status === 'paid',
+        isCompleted: apiDonation.status === 'completed',
+        discordShared: apiDonation.discord_shared || false,
         donationId: apiDonation.id,
+        paidAt: apiDonation.paid_at,
       }));
       donationsCache = donations;
       const { donationHistoryKey } = getStorageKeys();
@@ -158,7 +174,13 @@ export const loadDonationsFromAPI = async () => {
   }
 };
 
-// 기부 기록 저장
+// ============================================
+// Algorithm v3: 기부 기록 저장 (간소화)
+// - achievement_rate: 저장 안함 (런타임 계산)
+// - total_donated_sats: 저장 안함 (런타임 계산)
+// - total_accumulated_sats: 저장 안함 (런타임 계산)
+// - status: 결제 완료 시 'paid'로 시작 (Discord 공유 후 'completed')
+// ============================================
 export const saveDonationHistoryEntry = async (entry) => {
   const history = getDonationHistory();
   history.push(entry);
@@ -170,25 +192,24 @@ export const saveDonationHistoryEntry = async (entry) => {
   // 로그인한 경우 API에도 저장
   if (currentDiscordId && entry.isPaid) {
     try {
+      // Algorithm v3: 간소화된 페이로드
       await DonationAPI.create(currentDiscordId, {
         amount: entry.sats,
         currency: 'SAT',
         date: entry.date,
-        durationSeconds: entry.seconds,
-        durationMinutes: entry.minutes,
         donationMode: entry.mode,
         donationScope: entry.scope,
-        sessionId: entry.sessionId,
+        sessionId: entry.sessionId || null,
         note: entry.note,
         planText: entry.planText,
-        goalMinutes: entry.goalMinutes,
-        achievementRate: entry.achievementRate,
         photoUrl: entry.photoUrl,
         accumulatedSats: entry.accumulatedSats,
-        totalAccumulatedSats: entry.totalAccumulatedSats,
-        totalDonatedSats: entry.totalDonatedSats,
         transactionId: '',
-        status: 'completed',
+        // Algorithm v3: 결제 완료 = 'paid', Discord 공유 후 'completed'로 변경
+        status: 'paid',
+        // 아래 필드는 저장하지 않음 (런타임 계산)
+        // achievementRate, totalAccumulatedSats, totalDonatedSats
+        // durationSeconds, durationMinutes, goalMinutes
       });
       console.log('기부 기록이 API에 저장되었습니다.');
     } catch (error) {
