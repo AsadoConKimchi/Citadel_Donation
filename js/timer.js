@@ -244,7 +244,8 @@ export const finishSession = (additionalData = {}) => {
 
   const goalMinutes = getCurrentGoalMinutes();
   const achieved = goalMinutes > 0 ? elapsedSeconds >= goalMinutes * 60 : false;
-  const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  // UUID 형식으로 생성 (백엔드 스키마와 일치)
+  const sessionId = crypto.randomUUID();
   const sessionTimestamp = new Date().toISOString();
 
   const sessionData = {

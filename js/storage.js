@@ -4,13 +4,15 @@
  */
 
 import { getTodayKey } from './utils.js';
-import { StudySessionAPI, DonationAPI, AccumulatedSatsAPI } from '../api.js';
+import { StudySessionAPI, DonationAPI, AccumulatedSatsAPI, UserAPI } from '../api.js';
 
 // 캐시 변수
 let sessionsCache = null;
 let donationsCache = null;
 let pendingDailyCache = null;
 export let backendAccumulatedSats = 0;
+// Algorithm v3: 백엔드 총 기부액 (user_total_donated 테이블에서 로드)
+export let backendTotalDonatedSats = null;
 export let currentSession = null;
 
 // 현재 로그인한 Discord ID
@@ -26,6 +28,7 @@ export const getStorageKeys = () => {
     pendingDailyKey: 'citadel-pending-daily',
     donationScopeKey: 'citadel-donation-scope',
     backendAccumulatedKey: 'citadel-backend-accumulated-sats',
+    backendTotalDonatedKey: 'citadel-backend-total-donated-sats',
     timerEndKey: 'citadel-timer-end',
     timerGoalKey: 'citadel-timer-goal',
   };
@@ -175,11 +178,10 @@ export const loadDonationsFromAPI = async () => {
 };
 
 // ============================================
-// Algorithm v3: 기부 기록 저장 (간소화)
-// - achievement_rate: 저장 안함 (런타임 계산)
-// - total_donated_sats: 저장 안함 (런타임 계산)
-// - total_accumulated_sats: 저장 안함 (런타임 계산)
-// - status: 결제 완료 시 'paid'로 시작 (Discord 공유 후 'completed')
+// Algorithm v3 + 옵션 A: 기부 기록 저장 (2단계 분리)
+// - 1단계: status='paid'로 저장, donation_id 반환
+// - 2단계: Discord 공유 후 updateStatus로 'completed' 전환
+// - achievement_rate, total_donated_sats: 저장 안함 (런타임 계산)
 // ============================================
 export const saveDonationHistoryEntry = async (entry) => {
   const history = getDonationHistory();
@@ -189,11 +191,11 @@ export const saveDonationHistoryEntry = async (entry) => {
   localStorage.setItem(donationHistoryKey, JSON.stringify(history));
   donationsCache = history;
 
-  // 로그인한 경우 API에도 저장
+  // 로그인한 경우 API에 저장 (status: 'paid')
+  // 반환값: { success, data: { id: donation_id, ... } }
   if (currentDiscordId && entry.isPaid) {
     try {
-      // Algorithm v3: 간소화된 페이로드
-      await DonationAPI.create(currentDiscordId, {
+      const result = await DonationAPI.create(currentDiscordId, {
         amount: entry.sats,
         currency: 'SAT',
         date: entry.date,
@@ -205,17 +207,17 @@ export const saveDonationHistoryEntry = async (entry) => {
         photoUrl: entry.photoUrl,
         accumulatedSats: entry.accumulatedSats,
         transactionId: '',
-        // Algorithm v3: 결제 완료 = 'paid', Discord 공유 후 'completed'로 변경
-        status: 'paid',
-        // 아래 필드는 저장하지 않음 (런타임 계산)
-        // achievementRate, totalAccumulatedSats, totalDonatedSats
-        // durationSeconds, durationMinutes, goalMinutes
+        status: 'paid', // 1단계: paid로 저장
       });
-      console.log('기부 기록이 API에 저장되었습니다.');
+      console.log('✅ 기부 기록 저장 (status: paid)');
+      // donation_id 반환 (2단계 updateStatus에서 사용)
+      return result?.data?.id || null;
     } catch (error) {
-      console.error('API에 기부 기록 저장 실패:', error);
+      console.error('❌ API에 기부 기록 저장 실패:', error);
+      return null;
     }
   }
+  return null;
 };
 
 // 적립액 조회
@@ -268,6 +270,44 @@ export const setBackendAccumulatedSats = (value) => {
   backendAccumulatedSats = value;
   const { backendAccumulatedKey } = getStorageKeys();
   localStorage.setItem(backendAccumulatedKey, value.toString());
+};
+
+// ============================================
+// Algorithm v3: 백엔드에서 총 기부액 로드
+// user_total_donated 테이블에서 로드 (UserAPI.getStats)
+// ============================================
+export const loadTotalDonatedFromAPI = async () => {
+  if (!currentDiscordId) {
+    return;
+  }
+
+  try {
+    const response = await UserAPI.getStats(currentDiscordId);
+    if (response.success && response.data) {
+      // user_total_donated 테이블의 total_donated 값 사용
+      backendTotalDonatedSats = response.data.total_donated_sats || 0;
+      console.log(`✅ 백엔드 총 기부액 로드 완료: ${backendTotalDonatedSats} sats`);
+      const { backendTotalDonatedKey } = getStorageKeys();
+      localStorage.setItem(backendTotalDonatedKey, backendTotalDonatedSats.toString());
+    } else {
+      backendTotalDonatedSats = null;
+    }
+  } catch (error) {
+    console.error('❌ 백엔드에서 총 기부액 가져오기 실패:', error);
+    // 캐시된 값 사용
+    const { backendTotalDonatedKey } = getStorageKeys();
+    const cached = localStorage.getItem(backendTotalDonatedKey);
+    if (cached) {
+      backendTotalDonatedSats = parseInt(cached, 10) || null;
+    }
+  }
+};
+
+// 백엔드 총 기부액 설정
+export const setBackendTotalDonatedSats = (value) => {
+  backendTotalDonatedSats = value;
+  const { backendTotalDonatedKey } = getStorageKeys();
+  localStorage.setItem(backendTotalDonatedKey, value.toString());
 };
 
 // 마지막 세션 조회
@@ -332,8 +372,18 @@ export const getTotalSecondsToday = () => {
 // 결제 여부 확인
 export const isPaidEntry = (entry) => entry?.isPaid !== false;
 
-// 총 기부액
+// ============================================
+// Algorithm v3: 총 기부액
+// - 로그인 시: 백엔드 값 (user_total_donated 테이블) 우선 사용
+// - 비로그인/오프라인: localStorage 계산값 사용
+// ============================================
 export const getTotalDonatedSats = () => {
+  // 백엔드 값이 있으면 우선 사용 (status: 'completed'인 것만 합산됨)
+  if (currentDiscordId && backendTotalDonatedSats !== null) {
+    return backendTotalDonatedSats;
+  }
+
+  // 폴백: localStorage에서 계산
   const history = getDonationHistory();
   return history.reduce(
     (sum, item) => (isPaidEntry(item) ? sum + Number(item.sats || 0) : sum),

@@ -223,6 +223,17 @@ export const DonationAPI = {
   async getTopDonors(limit = 50) {
     return apiRequest(`/api/donations/top?limit=${limit}`);
   },
+
+  // 기부 상태 업데이트 (paid → completed)
+  async updateStatus(donationId, status, discordShared = true) {
+    return apiRequest(`/api/donations/${donationId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status,
+        discord_shared: discordShared,
+      }),
+    });
+  },
 };
 
 /**

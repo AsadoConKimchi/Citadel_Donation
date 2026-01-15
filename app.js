@@ -99,6 +99,8 @@ let pendingDailyCache = null; // API 호출 결과 캐시
 let sessionsCache = null; // POW 세션 캐시
 let donationsCache = null; // 기부 기록 캐시
 let backendAccumulatedSats = 0; // 백엔드에서 조회한 적립액 (하이브리드 시스템)
+// Algorithm v3: 백엔드 총 기부액 (user_total_donated 테이블에서 로드)
+let backendTotalDonatedSats = null;
 let currentSession = null; // 현재 세션 (메모리 변수, localStorage 제거)
 
 const donationControls = [
@@ -619,6 +621,35 @@ const loadDonationsFromAPI = async () => {
   }
 };
 
+// ============================================
+// Algorithm v3: 백엔드에서 총 기부액 로드
+// user_total_donated 테이블에서 로드 (UserAPI.getStats)
+// ============================================
+const loadTotalDonatedFromAPI = async () => {
+  if (!currentDiscordId || typeof UserAPI === 'undefined') {
+    return;
+  }
+
+  try {
+    const response = await UserAPI.getStats(currentDiscordId);
+    if (response.success && response.data) {
+      // user_total_donated 테이블의 total_donated 값 사용
+      backendTotalDonatedSats = response.data.total_donated_sats || 0;
+      console.log(`✅ 백엔드 총 기부액 로드 완료: ${backendTotalDonatedSats} sats`);
+      localStorage.setItem('citadel-backend-total-donated-sats', backendTotalDonatedSats.toString());
+    } else {
+      backendTotalDonatedSats = null;
+    }
+  } catch (error) {
+    console.error('❌ 백엔드에서 총 기부액 가져오기 실패:', error);
+    // 캐시된 값 사용
+    const cached = localStorage.getItem('citadel-backend-total-donated-sats');
+    if (cached) {
+      backendTotalDonatedSats = parseInt(cached, 10) || null;
+    }
+  }
+};
+
 const saveSessions = (sessions, key = sessionsKey) => {
   localStorage.setItem(key, JSON.stringify(sessions));
   sessionsCache = sessions;
@@ -812,7 +843,8 @@ const finishSession = () => {
   const plan = getPlanValue();
   const goalMinutes = parseGoalMinutes();
   const achieved = goalMinutes > 0 ? elapsedSeconds >= goalMinutes * 60 : false;
-  const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  // UUID 형식으로 생성 (백엔드 스키마와 일치)
+  const sessionId = crypto.randomUUID();
   const sessions = loadSessions();
   const sessionTimestamp = new Date().toISOString();
   const sessionData = {
@@ -968,11 +1000,23 @@ const getDonationHistory = () => {
 
 const isPaidEntry = (entry) => entry?.isPaid !== false;
 
-const getTotalDonatedSats = () =>
-  getDonationHistory().reduce(
+// ============================================
+// Algorithm v3: 총 기부액
+// - 로그인 시: 백엔드 값 (user_total_donated 테이블) 우선 사용
+// - 비로그인/오프라인: localStorage 계산값 사용
+// ============================================
+const getTotalDonatedSats = () => {
+  // 백엔드 값이 있으면 우선 사용 (status: 'completed'인 것만 합산됨)
+  if (currentDiscordId && backendTotalDonatedSats !== null) {
+    return backendTotalDonatedSats;
+  }
+
+  // 폴백: localStorage에서 계산
+  return getDonationHistory().reduce(
     (sum, item) => (isPaidEntry(item) ? sum + Number(item.sats || 0) : sum),
     0
   );
+};
 
 const renderLeaderboard = ({ element, entries, valueFormatter }) => {
   if (!element) {
@@ -1406,6 +1450,11 @@ const initializeTotals = () => {
   renderDonationHistory();
 };
 
+// ============================================
+// Algorithm v3 + Option A: 기부 기록 저장 (2단계 분리)
+// - 1단계: status='paid'로 저장, donation_id 반환
+// - 2단계: Discord 공유 후 updateStatus로 'completed' 전환
+// ============================================
 const saveDonationHistoryEntry = async ({
   date,
   sats,
@@ -1444,10 +1493,10 @@ const saveDonationHistoryEntry = async ({
   localStorage.setItem(donationHistoryKey, JSON.stringify(history));
   donationsCache = history;
 
-  // 로그인한 경우 API에도 저장
+  // 로그인한 경우 API에도 저장 (status: 'paid'로 저장, donation_id 반환)
   if (currentDiscordId && typeof DonationAPI !== 'undefined' && isPaid) {
     try {
-      await DonationAPI.create(currentDiscordId, {
+      const result = await DonationAPI.create(currentDiscordId, {
         amount: sats,
         currency: 'SAT',
         date: date,
@@ -1468,17 +1517,22 @@ const saveDonationHistoryEntry = async ({
         totalDonatedSats: totalDonatedSats,
         // 결제 정보
         transactionId: '',
-        status: 'completed',
+        status: 'paid', // 1단계: paid로 저장
       });
-      console.log('기부 기록이 API에 저장되었습니다.');
+      console.log('✅ 기부 기록 저장 (status: paid)');
+      // donation_id 반환 (2단계 updateStatus에서 사용)
+      updateDonationTotals();
+      renderDonationHistory();
+      return result?.data?.id || null;
     } catch (error) {
-      console.error('API에 기부 기록 저장 실패:', error);
+      console.error('❌ API에 기부 기록 저장 실패:', error);
       // 실패해도 localStorage에는 저장되어 있음
     }
   }
 
   updateDonationTotals();
   renderDonationHistory();
+  return null;
 };
 
 // ============================================
@@ -1695,26 +1749,15 @@ const openLightningWallet = async () => {
 
   await openLightningWalletWithPayload(payload, {
     onSuccess: async () => {
-      // Discord 공유 먼저 실행
-      try {
-        await shareToDiscordAPI({
-          sessionId: sessionId,
-          dataUrl: dataUrl,
-          planText: lastSession.plan,
-          durationSeconds: donationSeconds,
-          donationScope: scope,
-          donationSats: sats,
-          totalDonatedSats: totalDonatedSats,
-          totalAccumulatedSats: totalAccumulatedSats,
-          donationNote: note,
-        });
-      } catch (error) {
-        console.error("Discord 공유 실패:", error);
-        alert("Discord 공유에 실패했습니다: " + error.message);
-      }
+      // ============================================
+      // Algorithm v3 + Option A: 3단계 기부 흐름
+      // 1단계: DonationAPI.create(status: 'paid') → donation_id 반환
+      // 2단계: shareToDiscordAPI() → Discord 공유
+      // 3단계: DonationAPI.updateStatus(donation_id, 'completed')
+      // ============================================
 
-      // 기부 기록 저장
-      saveDonationHistoryEntry({
+      // 1단계: 기부 기록 저장 (status: 'paid')
+      const donationId = await saveDonationHistoryEntry({
         date: todayKey,
         sats,
         minutes: totalMinutes,
@@ -1734,6 +1777,35 @@ const openLightningWallet = async () => {
         totalAccumulatedSats: totalAccumulatedSats,
         totalDonatedSats: totalDonatedSats,
       });
+
+      // 2단계: Discord 공유
+      try {
+        await shareToDiscordAPI({
+          sessionId: sessionId,
+          dataUrl: dataUrl,
+          planText: lastSession.plan,
+          durationSeconds: donationSeconds,
+          donationScope: scope,
+          donationSats: sats,
+          totalDonatedSats: totalDonatedSats,
+          totalAccumulatedSats: totalAccumulatedSats,
+          donationNote: note,
+        });
+
+        // 3단계: Discord 공유 성공 시 status를 'completed'로 업데이트
+        if (donationId && typeof DonationAPI !== 'undefined') {
+          try {
+            await DonationAPI.updateStatus(donationId, 'completed', true);
+            console.log('✅ 기부 상태 업데이트 완료: completed');
+          } catch (statusError) {
+            console.error('⚠️ 기부 상태 업데이트 실패 (기부는 완료됨):', statusError);
+          }
+        }
+      } catch (error) {
+        console.error("Discord 공유 실패:", error);
+        alert("Discord 공유에 실패했습니다: " + error.message);
+        // 기부는 완료되었으나 Discord 공유 실패 - status는 'paid' 유지
+      }
 
       showAccumulationToast("기부 및 Discord 공유가 완료되었습니다. 페이지를 새로고침합니다...");
       setTimeout(() => {
@@ -1796,7 +1868,35 @@ const openAccumulatedDonationPayment = async () => {
   // 결제 완료 후 Discord 공유 및 localStorage 업데이트
   await openLightningWalletWithPayload(payload, {
     onSuccess: async () => {
-      // Discord 공유 먼저 실행
+      // ============================================
+      // Algorithm v3 + Option A: 3단계 기부 흐름
+      // 1단계: DonationAPI.create(status: 'paid') → donation_id 반환
+      // 2단계: shareToDiscordAPI() → Discord 공유
+      // 3단계: DonationAPI.updateStatus(donation_id, 'completed')
+      // ============================================
+
+      // 1단계: 기부 기록 저장 (status: 'paid')
+      const donationId = await saveDonationHistoryEntry({
+        date: todayKey,
+        sats,
+        minutes: totalMinutes,
+        seconds: donationSeconds,
+        mode,
+        scope: "total",
+        note,
+        isPaid: true,
+        // POW 정보
+        planText: lastSession.plan,
+        goalMinutes: lastSession.goalMinutes,
+        achievementRate: achievementRate,
+        photoUrl: dataUrl,
+        // 누적 정보
+        accumulatedSats: accumulatedSats,
+        totalAccumulatedSats: totalAccumulatedSats,
+        totalDonatedSats: totalDonatedSats,
+      });
+
+      // 2단계: Discord 공유
       try {
         await shareToDiscordAPI({
           sessionId: lastSession.sessionId,
@@ -1809,9 +1909,20 @@ const openAccumulatedDonationPayment = async () => {
           totalAccumulatedSats: totalAccumulatedSats,
           donationNote: note,
         });
+
+        // 3단계: Discord 공유 성공 시 status를 'completed'로 업데이트
+        if (donationId && typeof DonationAPI !== 'undefined') {
+          try {
+            await DonationAPI.updateStatus(donationId, 'completed', true);
+            console.log('✅ 기부 상태 업데이트 완료: completed');
+          } catch (statusError) {
+            console.error('⚠️ 기부 상태 업데이트 실패 (기부는 완료됨):', statusError);
+          }
+        }
       } catch (error) {
         console.error("Discord 공유 실패:", error);
         alert("Discord 공유에 실패했습니다: " + error.message);
+        // 기부는 완료되었으나 Discord 공유 실패 - status는 'paid' 유지
       }
 
       // ⭐️ 백엔드에서 적립액 차감
@@ -1820,7 +1931,7 @@ const openAccumulatedDonationPayment = async () => {
           const result = await AccumulatedSatsAPI.deduct(
             currentUser.id,
             sats,
-            null, // donation_id는 나중에 추가 가능
+            donationId, // donation_id 전달
             note || '적립액 기부'
           );
           console.log('✅ 적립액 차감 성공:', result);
@@ -1840,27 +1951,6 @@ const openAccumulatedDonationPayment = async () => {
       const pending = getPendingDaily();
       delete pending[todayKey];
       localStorage.setItem(pendingDailyKey, JSON.stringify(pending));
-
-      // 기부 기록 저장
-      saveDonationHistoryEntry({
-        date: todayKey,
-        sats,
-        minutes: totalMinutes,
-        seconds: donationSeconds,
-        mode,
-        scope: "total",
-        note,
-        isPaid: true,
-        // POW 정보
-        planText: lastSession.plan,
-        goalMinutes: lastSession.goalMinutes,
-        achievementRate: achievementRate,
-        photoUrl: dataUrl,
-        // 누적 정보
-        accumulatedSats: accumulatedSats,
-        totalAccumulatedSats: totalAccumulatedSats,
-        totalDonatedSats: totalDonatedSats,
-      });
 
       showAccumulationToast("적립액 기부 및 Discord 공유가 완료되었습니다. 페이지를 새로고침합니다...");
       setTimeout(() => {
@@ -2671,6 +2761,7 @@ const setAuthState = ({ authenticated, authorized, user, guild, error, userLevel
       loadPendingDailyFromAPI(),
       loadSessionsFromAPI(),
       loadDonationsFromAPI(),
+      loadTotalDonatedFromAPI(),
     ]).then(() => {
       // 로드 완료 후 UI 업데이트
       loadStudyPlan();
@@ -3154,7 +3245,7 @@ const shareToDiscordOnly = async () => {
           const result = await AccumulatedSatsAPI.add(
             currentDiscordId,
             satsToAccumulate,
-            lastSession.sessionId || null,  // 빈 문자열 → null 변환
+            lastSession.sessionId,  // UUID 형식 (중복 적립 방지 로직 활성화)
             donationNote?.value?.trim() || null
           );
           console.log('✅ 적립액 저장 성공:', result);

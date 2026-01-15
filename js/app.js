@@ -4,7 +4,7 @@
  */
 
 import { getTodayKey, parseGoalMinutes, formatTime, donationModeLabels } from './utils.js';
-import { UserAPI, StudySessionAPI, AccumulatedSatsAPI } from '../api.js';
+import { UserAPI, StudySessionAPI, AccumulatedSatsAPI, DonationAPI } from '../api.js';
 import {
   loadSessions,
   saveSessions,
@@ -14,6 +14,7 @@ import {
   loadSessionsFromAPI,
   loadDonationsFromAPI,
   loadPendingDailyFromAPI,
+  loadTotalDonatedFromAPI,
   setLastSessionSeconds,
   getLastSessionSeconds,
   getTotalSecondsToday,
@@ -490,6 +491,30 @@ const openLightningWallet = async () => {
 
   await openLightningWalletWithPayload(payload, {
     onSuccess: async () => {
+      // ============================================
+      // Algorithm v3 + Option A: 3단계 기부 흐름
+      // 1단계: DonationAPI.create(status: 'paid') → donation_id 반환
+      // 2단계: shareToDiscordAPI() → Discord 공유
+      // 3단계: DonationAPI.updateStatus(donation_id, 'completed')
+      // ============================================
+
+      // 1단계: 기부 기록 저장 (status: 'paid')
+      const donationId = await saveDonationHistoryEntry({
+        date: todayKey,
+        sats,
+        seconds: donationSeconds,
+        goalSeconds: goalSeconds,
+        mode,
+        scope,
+        sessionId,
+        note,
+        isPaid: true,
+        planText: lastSession.plan,
+        photoUrl: dataUrl,
+        accumulatedSats: scope === "session" ? 0 : accumulatedSats,
+      });
+
+      // 2단계: Discord 공유
       try {
         const video = getSelectedVideo();
         await shareToDiscordAPI({
@@ -503,28 +528,21 @@ const openLightningWallet = async () => {
           videoDataUrl: video?.dataUrl || null,
           videoFilename: video?.filename || null,
         });
+
+        // 3단계: Discord 공유 성공 시 status를 'completed'로 업데이트
+        if (donationId) {
+          try {
+            await DonationAPI.updateStatus(donationId, 'completed', true);
+            console.log('✅ 기부 상태 업데이트 완료: completed');
+          } catch (statusError) {
+            console.error('⚠️ 기부 상태 업데이트 실패 (기부는 완료됨):', statusError);
+          }
+        }
       } catch (error) {
         console.error("Discord 공유 실패:", error);
         alert("Discord 공유에 실패했습니다: " + error.message);
+        // 기부는 완료되었으나 Discord 공유 실패 - status는 'paid' 유지
       }
-
-      // Algorithm v3: 간소화된 기부 기록 (런타임 계산 필드 제외)
-      saveDonationHistoryEntry({
-        date: todayKey,
-        sats,
-        seconds: donationSeconds,
-        goalSeconds: goalSeconds,
-        mode,
-        scope,
-        sessionId,
-        note,
-        isPaid: true,
-        planText: lastSession.plan,
-        photoUrl: dataUrl,
-        accumulatedSats: scope === "session" ? 0 : accumulatedSats,
-        // Algorithm v3: 아래 필드는 저장하지 않음 (런타임 계산)
-        // achievementRate, totalAccumulatedSats, totalDonatedSats
-      });
 
       showAccumulationToast("기부 및 Discord 공유가 완료되었습니다. 페이지를 새로고침합니다...");
       setTimeout(() => {
@@ -579,14 +597,12 @@ const shareToDiscordOnly = async () => {
     // Algorithm v3: 적립 후 기부 모드 - 백엔드에 적립액 저장
     if (donationScopeValue === "total" && currentDiscordId) {
       try {
-        // BUG FIX: 프론트엔드 sessionId는 UUID 형식이 아니므로 null 전달
-        // 프론트엔드 sessionId: "1736946830000-abc123" (로컬 생성)
-        // 백엔드 기대값: UUID 형식 또는 null
-        // 두 ID가 서로 다르므로 중복 방지 로직도 작동하지 않음
+        // sessionId는 이제 UUID 형식 (crypto.randomUUID())으로 생성되므로
+        // 백엔드 스키마와 일치하여 중복 방지 로직이 정상 작동함
         const result = await AccumulatedSatsAPI.add(
           currentDiscordId,
           donationSats,
-          null, // sessionId는 null로 전달 (UUID 형식 불일치 문제 해결)
+          lastSession.sessionId, // UUID 형식 sessionId 전달 (중복 적립 방지)
           donationNote?.value?.trim() || null
         );
 
@@ -928,6 +944,7 @@ const initializeApp = async () => {
           loadPendingDailyFromAPI(),
           loadSessionsFromAPI(),
           loadDonationsFromAPI(),
+          loadTotalDonatedFromAPI(),
         ]);
 
         loadStudyPlan();
