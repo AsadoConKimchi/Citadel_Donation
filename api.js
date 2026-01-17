@@ -7,7 +7,43 @@
 const API_BASE_URL = window.BACKEND_API_URL || 'https://citadel-pow-backend.magadenuevo2025.workers.dev';
 
 /**
- * API 요청 헬퍼 함수
+ * API 재시도 설정
+ */
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000, // 1초
+  maxDelayMs: 10000, // 10초
+};
+
+/**
+ * 지수 백오프 딜레이 계산
+ */
+function getRetryDelay(attempt) {
+  const delay = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt);
+  return Math.min(delay, RETRY_CONFIG.maxDelayMs);
+}
+
+/**
+ * 재시도 가능한 에러인지 확인
+ * - 5xx 서버 에러: 재시도
+ * - 네트워크 에러 (fetch 실패): 재시도
+ * - 4xx 클라이언트 에러: 재시도 안함 (즉시 실패)
+ */
+function isRetryableError(error, response) {
+  // 네트워크 에러 (fetch 자체가 실패)
+  if (!response) {
+    return true;
+  }
+  // 5xx 서버 에러
+  if (response.status >= 500) {
+    return true;
+  }
+  // 4xx 클라이언트 에러는 재시도 안함
+  return false;
+}
+
+/**
+ * API 요청 헬퍼 함수 (재시도 로직 포함)
  */
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -27,19 +63,56 @@ async function apiRequest(endpoint, options = {}) {
     },
   };
 
-  try {
-    const response = await fetch(url, mergedOptions);
-    const data = await response.json();
+  let lastError = null;
+  let lastResponse = null;
 
-    if (!response.ok) {
-      throw new Error(data.error || `API 요청 실패: ${response.status}`);
+  for (let attempt = 0; attempt < RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, mergedOptions);
+      lastResponse = response;
+      const data = await response.json();
+
+      if (!response.ok) {
+        const error = new Error(data.error || `API 요청 실패: ${response.status}`);
+        error.status = response.status;
+        error.data = data;
+
+        // 4xx 에러는 즉시 실패 (재시도 안함)
+        if (response.status >= 400 && response.status < 500) {
+          throw error;
+        }
+
+        lastError = error;
+        // 5xx 에러는 재시도
+        if (attempt < RETRY_CONFIG.maxRetries - 1) {
+          const delay = getRetryDelay(attempt);
+          console.log(`⏳ API 재시도 ${attempt + 1}/${RETRY_CONFIG.maxRetries} (${delay}ms 후)...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+
+      // 네트워크 에러 또는 JSON 파싱 에러
+      if (isRetryableError(error, lastResponse) && attempt < RETRY_CONFIG.maxRetries - 1) {
+        const delay = getRetryDelay(attempt);
+        console.log(`⏳ API 재시도 ${attempt + 1}/${RETRY_CONFIG.maxRetries} (${delay}ms 후)...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      console.error('API 요청 오류:', error);
+      throw error;
     }
-
-    return data;
-  } catch (error) {
-    console.error('API 요청 오류:', error);
-    throw error;
   }
+
+  // 모든 재시도 실패
+  console.error('API 요청 최종 실패 (재시도 소진):', lastError);
+  throw lastError;
 }
 
 /**
@@ -78,36 +151,44 @@ export const UserAPI = {
 };
 
 /**
- * Algorithm v3: POW 세션 API
- * - achievement_rate: 저장 안함 (백엔드에서 런타임 계산)
+ * Algorithm v3 + Option A: POW 세션 API
+ * - session_id: 프론트엔드에서 생성한 UUID를 DB id로 사용 (Option A)
+ * - achievement_rate: 프론트엔드에서 계산하여 전송 (소수점 1자리)
  * - donation_id: 저장 안함 (donations.session_id로 단방향 참조)
- * - goal_seconds: 초 단위 지원
+ * - goal_minutes: 분 단위 (백엔드 스키마 일치)
  * - pow_fields: POW 분야 (pow-writing, pow-music 등)
  * - pow_plan_text: 오늘의 목표
  */
 export const StudySessionAPI = {
   // POW 세션 생성
   async create(discordId, sessionData) {
+    // 달성률 계산 (소수점 1자리)
+    const goalSeconds = sessionData.goalSeconds || (sessionData.goalMinutes ? sessionData.goalMinutes * 60 : 0);
+    const durationSeconds = sessionData.durationSeconds || 0;
+    const achievementRate = goalSeconds > 0
+      ? Math.round((durationSeconds / goalSeconds) * 1000) / 10  // 소수점 1자리
+      : 0;
+
     const payload = {
       discord_id: discordId,
+
+      // Option A: 프론트엔드에서 생성한 UUID를 DB id로 사용
+      session_id: sessionData.sessionId || null,
 
       // POW 정보
       pow_fields: sessionData.powFields || 'pow-writing',
       pow_plan_text: sessionData.powPlanText || '',
 
-      // 시간 정보
+      // 시간 정보 (초 단위 기준)
       start_time: sessionData.startTime,
       end_time: sessionData.endTime,
-      duration_seconds: sessionData.durationSeconds,
-      // Algorithm v3: goal_seconds 우선 사용
-      goal_seconds: sessionData.goalSeconds || (sessionData.goalMinutes ? sessionData.goalMinutes * 60 : 0),
+      duration_seconds: durationSeconds,
+      duration_minutes: Math.round(durationSeconds / 60),
+      goal_minutes: sessionData.goalMinutes || 0,
+      achievement_rate: achievementRate,
 
       // 인증카드
       photo_url: sessionData.photoUrl || null,
-
-      // Algorithm v3: 아래 필드는 저장하지 않음
-      // achievement_rate: 백엔드에서 런타임 계산
-      // donation_id: donations.session_id로 단방향 참조
     };
 
     console.log('📤 POW 세션 페이로드:', payload);

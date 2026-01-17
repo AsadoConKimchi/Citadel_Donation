@@ -77,6 +77,15 @@ const accumulationToastMessage = document.getElementById("accumulation-toast-mes
 const accumulationToastClose = accumulationToast?.querySelector(".toast-close");
 const timerAccumulatedNote = document.getElementById("timer-accumulated-note");
 
+// API 실패 모달 DOM 요소
+const apiFailureModal = document.getElementById("api-failure-modal");
+const apiFailureClose = document.getElementById("api-failure-close");
+const apiFailureMessage = document.getElementById("api-failure-message");
+const apiFailureRetry = document.getElementById("api-failure-retry");
+const apiFailureDiscordOnly = document.getElementById("api-failure-discord-only");
+const apiFailureCancel = document.getElementById("api-failure-cancel");
+const apiFailureStatus = document.getElementById("api-failure-status");
+
 let timerInterval = null;
 let elapsedSeconds = 0;
 let isRunning = false;
@@ -102,6 +111,11 @@ let backendAccumulatedSats = 0; // 백엔드에서 조회한 적립액 (하이�
 // Algorithm v3: 백엔드 총 기부액 (user_total_donated 테이블에서 로드)
 let backendTotalDonatedSats = null;
 let currentSession = null; // 현재 세션 (메모리 변수, localStorage 제거)
+
+// API 실패 모달 상태
+let apiFailureRetryCallback = null;
+let apiFailureDiscordOnlyCallback = null;
+let apiFailureCancelCallback = null;
 
 const donationControls = [
   donationScope,
@@ -884,8 +898,10 @@ const finishSession = () => {
 
       // 달성률 계산 (초 단위로 정확하게 계산)
       const actualMinutes = Math.round(elapsedSeconds / 60);
-      const achievementRate = goalMinutes > 0
-        ? Math.round((elapsedSeconds / 60 / goalMinutes) * 100)
+      // 달성률: 소수점 1자리 (초 단위 기준)
+      const goalSeconds = goalMinutes * 60;
+      const achievementRate = goalSeconds > 0
+        ? Math.round((elapsedSeconds / goalSeconds) * 1000) / 10
         : 0;
 
       // 현재 로그인한 사용자 정보 가져오기
@@ -894,16 +910,15 @@ const finishSession = () => {
         const sessionData = await res.json();
         if (sessionData.authenticated && sessionData.user?.id) {
           await StudySessionAPI.create(sessionData.user.id, {
+            // Option A: 프론트엔드에서 생성한 UUID를 DB id로 사용
+            sessionId: sessionId,
             powFields: currentMode,
             powPlanText: planWithCategory,
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
             durationSeconds: elapsedSeconds,
-            durationMinutes: actualMinutes,
             goalMinutes: goalMinutes || 0,
-            achievementRate: achievementRate,
             photoUrl: photoDataUrl,
-            donationId: null,
           });
           console.log('공부 세션이 백엔드에 저장되었습니다.');
         }
@@ -1734,9 +1749,10 @@ const openLightningWallet = async () => {
     accumulatedSats,
     totalAccumulatedSats,
   });
-  // 달성률 계산
-  const achievementRate = lastSession.goalMinutes > 0
-    ? Math.round((totalMinutes / lastSession.goalMinutes) * 100)
+  // 달성률 계산 (소수점 1자리, 초 단위 기준)
+  const goalSeconds = (lastSession.goalMinutes || 0) * 60;
+  const achievementRate = goalSeconds > 0
+    ? Math.round((donationSeconds / goalSeconds) * 1000) / 10
     : 0;
 
   // 현재 기부 타입 및 정보 저장
@@ -1852,9 +1868,10 @@ const openAccumulatedDonationPayment = async () => {
     totalAccumulatedSats,
   });
 
-  // 달성률 계산
-  const achievementRate = lastSession.goalMinutes > 0
-    ? Math.round((totalMinutes / lastSession.goalMinutes) * 100)
+  // 달성률 계산 (소수점 1자리, 초 단위 기준)
+  const goalSecondsAccum = (lastSession.goalMinutes || 0) * 60;
+  const achievementRate = goalSecondsAccum > 0
+    ? Math.round((donationSeconds / goalSecondsAccum) * 1000) / 10
     : 0;
 
   // 현재 기부 타입 및 정보 저장 (적립금 기부)
@@ -2483,6 +2500,132 @@ const closeWalletSelection = async () => {
     walletToast.classList.add("hidden");
   }
 };
+
+// ============================================
+// API 실패 모달 함수
+// ============================================
+
+/**
+ * API 실패 모달 열기
+ * @param {Object} options - 모달 옵션
+ * @param {string} options.message - 표시할 메시지
+ * @param {string} options.step - 실패한 단계 (session, donation, discord)
+ * @param {Function} options.onRetry - 재시도 콜백
+ * @param {Function} options.onDiscordOnly - 디스코드만 공유 콜백
+ * @param {Function} options.onCancel - 취소 콜백
+ */
+const openApiFailureModal = ({
+  message = "서버 연결에 실패했습니다. 다음 중 하나를 선택해주세요.",
+  step = "unknown",
+  onRetry = null,
+  onDiscordOnly = null,
+  onCancel = null,
+} = {}) => {
+  if (!apiFailureModal) {
+    console.error("API 실패 모달을 찾을 수 없습니다.");
+    // 모달이 없으면 기본 alert로 대체
+    const choice = window.confirm(
+      `${message}\n\n재시도하시겠습니까?\n(취소하면 작업이 중단됩니다.)`
+    );
+    if (choice && onRetry) {
+      onRetry();
+    } else if (onCancel) {
+      onCancel();
+    }
+    return;
+  }
+
+  // 콜백 저장
+  apiFailureRetryCallback = onRetry;
+  apiFailureDiscordOnlyCallback = onDiscordOnly;
+  apiFailureCancelCallback = onCancel;
+
+  // 메시지 설정
+  if (apiFailureMessage) {
+    apiFailureMessage.textContent = message;
+  }
+
+  // 상태 메시지 초기화
+  if (apiFailureStatus) {
+    apiFailureStatus.textContent = `실패 단계: ${step}`;
+  }
+
+  // "디스코드만 공유" 버튼 표시/숨김 (세션 저장 실패 시에만 표시)
+  if (apiFailureDiscordOnly) {
+    apiFailureDiscordOnly.style.display = onDiscordOnly ? "block" : "none";
+  }
+
+  // 모달 표시
+  apiFailureModal.classList.remove("hidden");
+  apiFailureModal.setAttribute("aria-hidden", "false");
+};
+
+/**
+ * API 실패 모달 닫기
+ */
+const closeApiFailureModal = () => {
+  if (!apiFailureModal) {
+    return;
+  }
+
+  apiFailureModal.classList.add("hidden");
+  apiFailureModal.setAttribute("aria-hidden", "true");
+
+  // 콜백 초기화
+  apiFailureRetryCallback = null;
+  apiFailureDiscordOnlyCallback = null;
+  apiFailureCancelCallback = null;
+
+  // 상태 메시지 초기화
+  if (apiFailureStatus) {
+    apiFailureStatus.textContent = "";
+  }
+};
+
+// API 실패 모달 이벤트 리스너
+apiFailureClose?.addEventListener("click", () => {
+  closeApiFailureModal();
+  if (apiFailureCancelCallback) {
+    apiFailureCancelCallback();
+  }
+});
+
+apiFailureRetry?.addEventListener("click", async () => {
+  if (apiFailureStatus) {
+    apiFailureStatus.textContent = "재시도 중...";
+  }
+  closeApiFailureModal();
+  if (apiFailureRetryCallback) {
+    await apiFailureRetryCallback();
+  }
+});
+
+apiFailureDiscordOnly?.addEventListener("click", async () => {
+  if (apiFailureStatus) {
+    apiFailureStatus.textContent = "디스코드 공유 중...";
+  }
+  closeApiFailureModal();
+  if (apiFailureDiscordOnlyCallback) {
+    await apiFailureDiscordOnlyCallback();
+  }
+});
+
+apiFailureCancel?.addEventListener("click", () => {
+  closeApiFailureModal();
+  if (apiFailureCancelCallback) {
+    apiFailureCancelCallback();
+  }
+});
+
+// 모달 외부 클릭 시 닫기
+apiFailureModal?.addEventListener("click", (event) => {
+  if (event.target === apiFailureModal) {
+    closeApiFailureModal();
+    if (apiFailureCancelCallback) {
+      apiFailureCancelCallback();
+    }
+  }
+});
 
 const launchWallet = async (walletKey) => {
   const modalInvoice = walletModal?.dataset?.invoice;

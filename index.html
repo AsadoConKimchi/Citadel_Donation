@@ -244,6 +244,26 @@
       </div>
     </div>
 
+    <div id="api-failure-modal" class="wallet-modal hidden" aria-hidden="true">
+      <div class="wallet-modal__panel" role="dialog" aria-modal="true">
+        <div class="wallet-modal__header">
+          <h3>API 요청 실패</h3>
+          <button class="wallet-modal__close" id="api-failure-close" aria-label="닫기">
+            ✕
+          </button>
+        </div>
+        <div class="wallet-modal__body">
+          <p id="api-failure-message" style="margin-bottom: 1rem; color: var(--text-2);">
+            서버 연결에 실패했습니다. 다음 중 하나를 선택해주세요.
+          </p>
+          <button class="wallet-option" id="api-failure-retry">재시도</button>
+          <button class="wallet-option" id="api-failure-discord-only">디스코드만 공유</button>
+          <button class="wallet-option" id="api-failure-cancel" style="background: var(--surface-3);">취소</button>
+        </div>
+        <p class="hint" id="api-failure-status"></p>
+      </div>
+    </div>
+
     <script src="config.js"></script>
     <!-- ES6 Modules -->
     <script type="module" src="js/app.js"></script>
