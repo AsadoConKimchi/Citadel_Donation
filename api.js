@@ -184,7 +184,8 @@ export const StudySessionAPI = {
       end_time: sessionData.endTime,
       duration_seconds: durationSeconds,
       duration_minutes: Math.round(durationSeconds / 60),
-      goal_minutes: sessionData.goalMinutes || 0,
+      goal_seconds: goalSeconds,  // CASE 1 수정: goal_seconds 추가
+      goal_minutes: sessionData.goalMinutes || Math.round(goalSeconds / 60),
       achievement_rate: achievementRate,
 
       // 인증카드

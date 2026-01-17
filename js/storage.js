@@ -182,8 +182,9 @@ export const loadDonationsFromAPI = async () => {
 
 // ============================================
 // Algorithm v3 + 옵션 A: 기부 기록 저장 (2단계 분리)
-// - 1단계: status='paid'로 저장, donation_id 반환
-// - 2단계: Discord 공유 후 updateStatus로 'completed' 전환
+// - CASE 1: status='paid'로 저장, donation_id 반환
+// - CASE 2: status='accumulated'로 저장 (결제 없이 적립만)
+// - 2단계: Discord 공유 후 updateStatus로 'completed' 또는 discord_shared 업데이트
 // - achievement_rate, total_donated_sats: 저장 안함 (런타임 계산)
 // ============================================
 export const saveDonationHistoryEntry = async (entry) => {
@@ -194,10 +195,16 @@ export const saveDonationHistoryEntry = async (entry) => {
   localStorage.setItem(donationHistoryKey, JSON.stringify(history));
   donationsCache = history;
 
-  // 로그인한 경우 API에 저장 (status: 'paid')
-  // 반환값: { success, data: { id: donation_id, ... } }
-  if (currentDiscordId && entry.isPaid) {
+  // 로그인한 경우 API에 저장
+  // - CASE 1 (isPaid: true): status='paid'로 저장
+  // - CASE 2 (isPaid: false, status: 'accumulated'): status='accumulated'로 저장
+  const shouldSaveToAPI = currentDiscordId && (entry.isPaid || entry.status === 'accumulated');
+
+  if (shouldSaveToAPI) {
     try {
+      // CASE 2: entry.status가 'accumulated'면 그대로 사용, 아니면 'paid'
+      const apiStatus = entry.status || (entry.isPaid ? 'paid' : 'pending');
+
       const result = await DonationAPI.create(currentDiscordId, {
         amount: entry.sats,
         currency: 'SAT',
@@ -210,9 +217,9 @@ export const saveDonationHistoryEntry = async (entry) => {
         photoUrl: entry.photoUrl,
         accumulatedSats: entry.accumulatedSats,
         transactionId: '',
-        status: 'paid', // 1단계: paid로 저장
+        status: apiStatus,
       });
-      console.log('✅ 기부 기록 저장 (status: paid)');
+      console.log(`✅ 기부 기록 저장 (status: ${apiStatus})`);
       // donation_id 반환 (2단계 updateStatus에서 사용)
       return result?.data?.id || null;
     } catch (error) {

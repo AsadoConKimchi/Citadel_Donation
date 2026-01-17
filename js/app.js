@@ -462,6 +462,7 @@ const handleFinishSession = () => {
           endTime: endTime.toISOString(),
           durationSeconds: sessionData.durationSeconds,
           goalSeconds: goalSeconds,
+          goalMinutes: sessionData.goalMinutes,  // CASE 1 수정: goalMinutes도 전달
           photoUrl: photoDataUrl,
           // status: 'pending' (백엔드 기본값)
         });
@@ -717,9 +718,10 @@ const openLightningWallet = async () => {
 // ========================================
 
 // ============================================
-// Algorithm v3: CASE 2 - 적립만 모드 (total mode)
-// 흐름: POW 세션 (pending) → Discord 공유 → POW (completed) → 적립액 저장
-// 롤백: Discord 공유 실패 시 POW 세션 삭제
+// Algorithm v3 (수정됨): CASE 2 - 적립만 모드 (total mode)
+// 흐름: POW 세션 (pending) → donations (accumulated) → Discord 공유 → POW (completed)
+// donations 테이블에 status='accumulated', is_paid=false로 저장
+// 롤백: Discord 공유 실패 시 POW 세션 삭제 + donation 상태 failed로 변경
 // ============================================
 const shareToDiscordOnly = async () => {
   let dataUrl = getBadgeDataUrl();
@@ -729,18 +731,55 @@ const shareToDiscordOnly = async () => {
   }
 
   if (shareStatus) {
-    shareStatus.textContent = "디스코드 공유를 진행 중입니다.";
+    shareStatus.textContent = "적립 정보를 저장 중입니다.";
   }
 
   const lastSession = getLastSessionSeconds();
   const donationScopeValue = getDonationScopeValue();
-  const donationSats = getCurrentSessionSats();
+  const donationSats = getSessionAccumulatedSats();  // 적립 sats (달성률 적용)
+  const mode = donationMode?.value || "pow-writing";
+  const note = donationNote?.value?.trim() || "";
 
   // Algorithm v3: currentPendingSession에서 sessionId 가져오기 (Option A)
   const sessionId = currentPendingSession.sessionId || lastSession.sessionId || null;
 
+  // goal_seconds 계산
+  const goalSeconds = (lastSession.goalMinutes || 0) * 60;
+
   try {
-    // 1단계: Discord 공유
+    // ============================================
+    // 1단계: donations 테이블에 적립 기록 저장 (status: 'accumulated')
+    // - is_paid = false (결제 안함)
+    // - accumulated_sats 기록
+    // ============================================
+    const donationId = await saveDonationHistoryEntry({
+      date: todayKey,
+      sats: donationSats,
+      seconds: lastSession.durationSeconds,
+      goalSeconds: goalSeconds,
+      mode: mode,
+      scope: donationScopeValue,
+      sessionId: sessionId,
+      note: note,
+      isPaid: false,  // CASE 2: 결제 안함
+      status: 'accumulated',  // CASE 2: 적립만
+      planText: lastSession.plan,
+      photoUrl: dataUrl,
+      accumulatedSats: donationSats,
+    });
+
+    if (donationId) {
+      currentPendingSession.donationId = donationId;
+      console.log(`✅ 적립 기록 저장 완료 (status: accumulated): ${donationId}`);
+    }
+
+    if (shareStatus) {
+      shareStatus.textContent = "디스코드 공유를 진행 중입니다.";
+    }
+
+    // ============================================
+    // 2단계: Discord 공유
+    // ============================================
     const video = getSelectedVideo();
     const shareResult = await shareToDiscordAPI({
       sessionId: sessionId,
@@ -749,7 +788,7 @@ const shareToDiscordOnly = async () => {
       durationSeconds: lastSession.durationSeconds,
       donationScope: donationScopeValue,
       donationSats: donationSats,
-      donationNote: donationNote?.value?.trim() || "",
+      donationNote: note,
       videoDataUrl: video?.dataUrl || null,
       videoFilename: video?.filename || null,
     });
@@ -762,7 +801,21 @@ const shareToDiscordOnly = async () => {
       shareStatus.textContent = "디스코드 공유를 완료했습니다.";
     }
 
-    // 2단계: POW session status → 'completed' (CASE 2)
+    // ============================================
+    // 3단계: donation 상태 업데이트 (discord_shared = true)
+    // ============================================
+    if (donationId) {
+      try {
+        await DonationAPI.updateStatus(donationId, 'accumulated', true);
+        console.log('✅ 적립 기록 업데이트 완료: discord_shared = true');
+      } catch (statusError) {
+        console.error('⚠️ 적립 기록 업데이트 실패 (적립은 완료됨):', statusError);
+      }
+    }
+
+    // ============================================
+    // 4단계: POW session status → 'completed' (CASE 2)
+    // ============================================
     if (sessionId) {
       try {
         await StudySessionAPI.updateStatus(sessionId, 'completed');
@@ -773,14 +826,16 @@ const shareToDiscordOnly = async () => {
       }
     }
 
-    // 3단계: 적립액 저장 (백엔드)
+    // ============================================
+    // 5단계: 적립액 저장 (user_accumulated_sats 테이블)
+    // ============================================
     if (donationScopeValue === "total" && currentDiscordId) {
       try {
         const result = await AccumulatedSatsAPI.add(
           currentDiscordId,
           donationSats,
           sessionId, // UUID 형식 sessionId 전달 (중복 적립 방지)
-          donationNote?.value?.trim() || null
+          note || null
         );
 
         if (result.success && result.data) {
@@ -803,7 +858,7 @@ const shareToDiscordOnly = async () => {
     }
 
     updateAccumulatedSats();
-    showAccumulationToast("디스코드 공유가 완료되었습니다. 페이지를 새로고침합니다...");
+    showAccumulationToast(`${donationSats} sats가 적립되었습니다. 페이지를 새로고침합니다...`);
     setTimeout(() => {
       window.location.reload();
     }, 1500);
@@ -813,6 +868,16 @@ const shareToDiscordOnly = async () => {
 
     // 롤백 실행
     await rollbackTransaction('discord_share');
+
+    // donation 롤백 (status → failed)
+    if (currentPendingSession.donationId) {
+      try {
+        await DonationAPI.updateStatus(currentPendingSession.donationId, 'failed', false);
+        console.log(`✅ 적립 기록 롤백 완료: ${currentPendingSession.donationId}`);
+      } catch (rollbackError) {
+        console.error('⚠️ 적립 기록 롤백 실패:', rollbackError);
+      }
+    }
 
     if (shareStatus) {
       shareStatus.textContent = error?.message || "디스코드 공유에 실패했습니다.";
