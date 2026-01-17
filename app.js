@@ -3315,15 +3315,44 @@ const shareToDiscordOnly = async () => {
     return;
   }
 
-  // ⭐️ 방안 A: 기부 정보 수집
+  // ⭐️ Algorithm v3 수정: 기부 정보 수집
   const donationScopeValue = getDonationScopeValue();
-  // Discord 공유 시에는 항상 현재 세션 sats(B) 사용
+  // Discord 공유 시에는 항상 현재 세션 sats 사용
   const donationSats = getCurrentSessionSats();
   const totalDonatedSats = getTotalDonatedSats();
-  // 총 적립액은 기존 적립액 + 현재 세션 sats
-  const totalAccumulatedSats = donationScopeValue === "total"
-    ? backendAccumulatedSats + donationSats
-    : 0;
+
+  // ⭐️ Algorithm v3 수정: 적립 모드(total)일 때 먼저 적립액 저장
+  let totalAccumulatedSats = 0;
+  if (donationScopeValue === "total") {
+    if (typeof AccumulatedSatsAPI !== 'undefined' && currentDiscordId) {
+      try {
+        if (shareStatus) {
+          shareStatus.textContent = "적립액을 저장하는 중...";
+        }
+        const result = await AccumulatedSatsAPI.add(
+          currentDiscordId,
+          donationSats,
+          lastSession.sessionId,  // UUID 형식 (중복 적립 방지 로직 활성화)
+          donationNote?.value?.trim() || null
+        );
+        console.log('✅ 적립액 저장 성공:', result);
+
+        // 백엔드에서 반환된 정확한 총 적립액 사용
+        if (result.success && result.data) {
+          totalAccumulatedSats = result.data.amount_after;
+          backendAccumulatedSats = result.data.amount_after;
+          localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
+        }
+      } catch (error) {
+        console.error('❌ 적립액 저장 실패:', error);
+        if (shareStatus) {
+          shareStatus.textContent = "적립액 저장에 실패했습니다.";
+        }
+        alert("적립액 저장에 실패했습니다. 다시 시도해주세요.");
+        return; // 적립 실패 시 Discord 공유도 중단
+      }
+    }
+  }
 
   // Bot이 기대하는 형식으로 데이터 준비 (백엔드 스키마와 일치)
   const botPayload = {
@@ -3337,11 +3366,14 @@ const shareToDiscordOnly = async () => {
     donation_mode: donationScopeValue,
     donation_sats: donationSats,
     total_donated_sats: totalDonatedSats,
-    total_accumulated_sats: totalAccumulatedSats,
+    total_accumulated_sats: totalAccumulatedSats, // 백엔드에서 반환된 정확한 값
     donation_note: donationNote?.value?.trim() || "",
   };
 
   try {
+    if (shareStatus) {
+      shareStatus.textContent = "디스코드에 공유하는 중...";
+    }
     // 백엔드 API를 통해 Discord에 전송
     const response = await fetch("https://citadel-pow-backend.magadenuevo2025.workers.dev/api/discord-posts/share", {
       method: "POST",
@@ -3362,48 +3394,26 @@ const shareToDiscordOnly = async () => {
       shareStatus.textContent = "디스코드 공유를 완료했습니다.";
     }
 
-    // 적립 후 기부 모드가 아닌 경우에만 기부 기록 저장
-    if (getDonationScopeValue() !== "total") {
+    // 즉시 기부 모드(session)일 때만 기부 기록 저장
+    if (donationScopeValue !== "total") {
       const mode = donationMode?.value || "pow-writing";
       const { sats, seconds: donationSeconds, scope } = getDonationPaymentSnapshot();
       const totalMinutes = Math.floor(donationSeconds / 60);
       const note = donationNote?.value?.trim() || "";
       saveDonationHistoryEntry({
         date: todayKey,
-        sats: payload.sats,
+        sats: donationSats,
         minutes: totalMinutes,
         seconds: donationSeconds,
         mode,
-        scope: getDonationScopeValue(),
+        scope: donationScopeValue,
         sessionId: scope === "session" ? lastSession.sessionId : "",
         note,
         isPaid: false,
       });
       donationPage = 1;
-    } else {
-      // ⭐️ 적립 후 기부 모드: 백엔드에 적립액 저장
-      if (typeof AccumulatedSatsAPI !== 'undefined' && currentDiscordId) {
-        try {
-          const satsToAccumulate = donationSats;
-          const result = await AccumulatedSatsAPI.add(
-            currentDiscordId,
-            satsToAccumulate,
-            lastSession.sessionId,  // UUID 형식 (중복 적립 방지 로직 활성화)
-            donationNote?.value?.trim() || null
-          );
-          console.log('✅ 적립액 저장 성공:', result);
-
-          // 백엔드 적립액 변수 업데이트
-          if (result.success && result.data) {
-            backendAccumulatedSats = result.data.amount_after;
-            localStorage.setItem('citadel-backend-accumulated-sats', backendAccumulatedSats.toString());
-          }
-        } catch (error) {
-          console.error('❌ 적립액 저장 실패:', error);
-          // 실패해도 디스코드 공유는 성공했으므로 계속 진행
-        }
-      }
     }
+    // 적립 모드(total)는 이미 위에서 처리됨
 
     // 디스코드 공유 성공 후 오늘의 목표 초기화
     localStorage.removeItem(planKey);
