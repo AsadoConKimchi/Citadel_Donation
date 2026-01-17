@@ -279,8 +279,9 @@ const sendDiscordShare = async ({
   const modeLabel = getDonationModeLabel(donationMode);
   const noteValue = donationNote?.trim() || "없음";
   const noteLine = `${mentionLabel}님의 한마디 : "${noteValue}"`;
+  // ⭐️ CASE 3 조건 수정: "total" 또는 "accumulated" 모두 적립금 기부로 인식
   const isAccumulatedPayment =
-    shareContext === "payment" && donationScope && donationScope === "total";
+    shareContext === "payment" && donationScope && (donationScope === "total" || donationScope === "accumulated");
   const isAccumulatedShare = shareContext === "share" && donationScope === "total";
   const safeTotalDonated = Number(totalDonatedSats || 0);
   const safeAccumulated = Number(accumulatedSats || 0);
